@@ -1161,6 +1161,35 @@ function _extractPdfFromEps(arrayBuf){
   return arrayBuf.slice(pdfStart, pdfEnd);
 }
 
+/* ── EPS: server-side conversion via Supabase Edge Function (Ghostscript WASM) ──
+   Called when _extractPdfFromEps returns null (no embedded PDF found).
+   Sends the raw EPS bytes to the convert-eps edge function which runs
+   Ghostscript compiled to WASM and returns a PDF. */
+async function _convertEpsServer(arrayBuf){
+  const sb = window.gsAuth?.supabase;
+  if(!sb) throw new Error('Niet ingelogd');
+  const { data:{ session } } = await sb.auth.getSession();
+  if(!session) throw new Error('Sessie verlopen — log opnieuw in');
+  const resp = await fetch(
+    'https://nzkwkydafrnvmmqiuabt.supabase.co/functions/v1/convert-eps',
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + session.access_token,
+        'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56a3dreWRhZnJudm1tcWl1YWJ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyMDQ2NDEsImV4cCI6MjA5Nzc4MDY0MX0.Lb9yDQGeA64FQaurQAIvfd3wNLCGbMEyVK0gyqtbSyM',
+        'Content-Type': 'application/octet-stream'
+      },
+      body: new Uint8Array(arrayBuf)
+    }
+  );
+  if(!resp.ok){
+    let msg = 'Conversie mislukt';
+    try{ const j = await resp.json(); msg = j.error || msg; }catch{}
+    throw new Error(msg);
+  }
+  return await resp.arrayBuffer();
+}
+
 function handleFiles(files){
   [...files].forEach(file=>{
     const type = file.type;
@@ -1185,16 +1214,25 @@ function handleFiles(files){
       };
       reader.readAsText(file);
     } else if(ext==='eps'){
-      // EPS files: try to extract embedded PDF stream (most modern EPS from
-      // Illustrator/CorelDRAW contain a full PDF representation).
+      // EPS: try local embedded-PDF extraction first, then server-side
+      // Ghostscript conversion for EPS without embedded PDF.
       const reader = new FileReader();
-      reader.onload = ev=>{
+      reader.onload = async ev=>{
         const buf = ev.target.result;
         const pdfBuf = _extractPdfFromEps(buf);
         if(pdfBuf){
           loadPdfAsImage(pdfBuf, file.name);
-        } else {
-          toast(`EPS zonder embedded PDF — sla het bestand op als PDF of AI en upload opnieuw.`, 'warn', 6000);
+          return;
+        }
+        // No embedded PDF — convert via Edge Function (Ghostscript WASM)
+        toast('EPS wordt geconverteerd…', 'info', 30000);
+        try {
+          const convertedPdf = await _convertEpsServer(buf);
+          loadPdfAsImage(convertedPdf, file.name);
+          toast('EPS geconverteerd', 'success', 3000);
+        } catch(err){
+          console.error('[GSB] EPS server conversion error:', err);
+          toast('EPS conversie mislukt: ' + (err.message||'onbekende fout') + '. Probeer het bestand als PDF op te slaan.', 'warn', 8000);
         }
       };
       reader.readAsArrayBuffer(file);
