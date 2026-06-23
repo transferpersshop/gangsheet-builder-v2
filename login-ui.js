@@ -183,16 +183,50 @@ async function loadProject(id){
   if(window.gsbLoadProject) window.gsbLoadProject(data);
 }
 
-async function saveCurrentProject(){
+/* ── Save dialog flow ── */
+function openSaveDialog(){
   if(!window.gsbGetProjectData){ alert('Builder niet geladen'); return; }
+  const nameInput = document.getElementById('saveProjectName');
+  // Pre-fill with current project name
+  const current = window.gsbGetProjectData();
+  if(nameInput){
+    nameInput.value = current.name || 'Naamloos project';
+  }
+  document.getElementById('saveNameModal').style.display = '';
+  setTimeout(() => { if(nameInput){ nameInput.focus(); nameInput.select(); } }, 80);
+}
+
+function closeSaveDialog(){
+  const m = document.getElementById('saveNameModal');
+  if(m) m.style.display = 'none';
+}
+
+async function confirmSave(){
+  const nameInput = document.getElementById('saveProjectName');
+  const name = (nameInput?.value || '').trim() || 'Naamloos project';
+  closeSaveDialog();
+
   const projectData = window.gsbGetProjectData();
+  projectData.name = name;
+
   const { data, error } = await gsAuth.saveProject(projectData);
   if(error){ alert('Opslaan mislukt: ' + error.message); return; }
-  // Store current project id for future saves
   if(data?.id && window.gsbSetProjectId) window.gsbSetProjectId(data.id);
-  closeModal('projectsModal');
+
+  // Pulse the user avatar so user knows where to find saved projects
+  const avatar = document.getElementById('userAvatarBtn');
+  if(avatar){
+    avatar.classList.remove('save-pulse');
+    void avatar.offsetWidth; // force reflow for re-trigger
+    avatar.classList.add('save-pulse');
+    avatar.addEventListener('animationend', () => avatar.classList.remove('save-pulse'), { once: true });
+  }
+
   if(window.toast) window.toast('Project opgeslagen', 'success');
 }
+
+// Backward-compatible alias
+async function saveCurrentProject(){ openSaveDialog(); }
 
 async function deleteProject(id, name){
   if(!confirm(`"${name}" verwijderen? Dit kan niet ongedaan worden.`)) return;
@@ -369,6 +403,7 @@ window.gsLoginUI = {
   toggleUserMenu, logout,
   openModal, closeModal,
   openProjects, loadProject, saveCurrentProject, deleteProject,
+  openSaveDialog, closeSaveDialog, confirmSave,
   openProfile, handleProfileSave,
   openAdmin, adminTab, changeRole, toggleBlock,
   saveSetting,

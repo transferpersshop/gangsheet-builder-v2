@@ -306,6 +306,17 @@ window.addEventListener('load', ()=>{
   .export-btn-bg{width:100%;justify-content:center;padding:8px 16px;font-size:.8rem;background:var(--surface);border:1px solid var(--border);color:var(--muted);cursor:pointer;margin-bottom:6px;transition:background .15s,color .15s}
   .export-btn-bg:hover{background:var(--border);color:var(--text)}
   .export-btn-big{width:100%;justify-content:center;padding:14px 16px;font-size:.95rem}
+  .footer-btn-row{display:flex;gap:6px;margin-bottom:6px}
+  .footer-btn-row .btn{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:4px}
+  .footer-btn-row .btn svg{width:15px;height:15px;flex-shrink:0}
+
+  /* Save‐pulse animation on user avatar */
+  @keyframes avatarPulse{
+    0%{transform:scale(1);box-shadow:0 0 0 0 rgba(105,70,200,.6)}
+    50%{transform:scale(1.15);box-shadow:0 0 0 10px rgba(105,70,200,0)}
+    100%{transform:scale(1);box-shadow:0 0 0 0 rgba(105,70,200,0)}
+  }
+  .user-avatar.save-pulse{animation:avatarPulse .8s ease-out}
 
   .toast-wrap{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:8px;z-index:999;pointer-events:none}
   .toast{background:#fff;padding:12px 18px;border-radius:10px;border-left:4px solid var(--primary);box-shadow:0 6px 20px rgba(0,0,0,.15);font-size:.85rem;min-width:260px;max-width:480px;text-align:center;animation:toastIn .25s ease;pointer-events:auto;transition:opacity .35s ease, transform .35s ease;display:inline-flex;align-items:center;gap:12px;justify-content:center}
@@ -573,9 +584,6 @@ window.addEventListener('load', ()=>{
       <h1 data-i18n="appTitle">Gang Sheet Builder</h1>
     </div>
     <div class="header-right">
-      <button class="hdr-icon-btn" id="saveProjectBtn" title="Project opslaan" onclick="gsLoginUI.saveCurrentProject()">
-        <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-      </button>
       <button class="hdr-icon-btn" id="tourBtn" title="Rondleiding">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
       </button>
@@ -757,7 +765,13 @@ window.addEventListener('load', ()=>{
       </div>
       <div class="right-footer">
         <div class="pdf-progress" id="pdfProgressWrap"></div>
-        <button class="btn export-btn-bg" id="exportBgBtn" data-i18n="exportBgBtn">Download drukproef</button>
+        <div class="footer-btn-row">
+          <button class="btn export-btn-bg" id="exportBgBtn" data-i18n="exportBgBtn">Download drukproef</button>
+          <button class="btn export-btn-bg" id="saveProjectBtn" onclick="gsLoginUI.openSaveDialog()">
+            <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            Opslaan
+          </button>
+        </div>
         <button class="btn btn-grad-fill export-btn-big" id="exportBtn" data-i18n="exportBtn">Download print-ready PDF</button>
       </div>
     </aside>
@@ -841,6 +855,23 @@ window.addEventListener('load', ()=>{
       <span class="tour-step" id="tourStepNum"></span>
       <button class="tour-btn tour-skip" id="tourSkip" data-i18n="tourSkip">Sluiten</button>
       <button class="tour-btn tour-next" id="tourNext" data-i18n="tourNext">Volgende</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Save-name dialog ═══ -->
+<div class="gsb-modal-backdrop" id="saveNameModal" style="display:none" onclick="if(event.target===this)gsLoginUI.closeSaveDialog()">
+  <div class="gsb-modal" style="max-width:400px">
+    <div class="gsb-modal-head">
+      <h3>Project opslaan</h3>
+      <button class="gsb-modal-close" onclick="gsLoginUI.closeSaveDialog()">&times;</button>
+    </div>
+    <div class="gsb-modal-body" style="padding:18px 22px">
+      <div class="pf-field">
+        <label for="saveProjectName">Projectnaam</label>
+        <input type="text" id="saveProjectName" class="login-field" placeholder="Mijn project" onkeydown="if(event.key==='Enter')gsLoginUI.confirmSave()">
+      </div>
+      <button class="btn btn-grad-fill" style="width:100%;margin-top:14px;padding:10px 16px" onclick="gsLoginUI.confirmSave()">Opslaan</button>
     </div>
   </div>
 </div>

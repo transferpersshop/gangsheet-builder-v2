@@ -43,6 +43,9 @@ function showApp(){
   hideEl('loginScreen');
   showEl('appContainer');
   updateUserMenu();
+  // Canvas was initialised while appContainer had display:none —
+  // trigger resize so it picks up the correct container dimensions.
+  setTimeout(() => window.dispatchEvent(new Event('resize')), 100);
 }
 
 function updateUserMenu(){
