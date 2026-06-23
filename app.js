@@ -1161,33 +1161,51 @@ function _extractPdfFromEps(arrayBuf){
   return arrayBuf.slice(pdfStart, pdfEnd);
 }
 
-/* ── EPS: server-side conversion via Supabase Edge Function (Ghostscript WASM) ──
+/* ── EPS: client-side conversion via Ghostscript WASM (Web Worker) ──
    Called when _extractPdfFromEps returns null (no embedded PDF found).
-   Sends the raw EPS bytes to the convert-eps edge function which runs
-   Ghostscript compiled to WASM and returns a PDF. */
-async function _convertEpsServer(arrayBuf){
-  const sb = window.gsAuth?.supabase;
-  if(!sb) throw new Error('Niet ingelogd');
-  const { data:{ session } } = await sb.auth.getSession();
-  if(!session) throw new Error('Sessie verlopen — log opnieuw in');
-  const resp = await fetch(
-    'https://nzkwkydafrnvmmqiuabt.supabase.co/functions/v1/convert-eps',
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': 'Bearer ' + session.access_token,
-        'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56a3dreWRhZnJudm1tcWl1YWJ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyMDQ2NDEsImV4cCI6MjA5Nzc4MDY0MX0.Lb9yDQGeA64FQaurQAIvfd3wNLCGbMEyVK0gyqtbSyM',
-        'Content-Type': 'application/octet-stream'
-      },
-      body: new Uint8Array(arrayBuf)
+   Loads @jspawn/ghostscript-wasm (~16 MB, cached by browser) inside a
+   Web Worker so the UI stays responsive. Returns a PDF ArrayBuffer.
+   No server, no auth, no upload — runs entirely in the browser. */
+let _epsWorker = null;
+let _epsConvertId = 0;
+
+function _convertEpsClient(arrayBuf){
+  return new Promise(function(resolve, reject){
+    // Lazy-create the worker
+    if(!_epsWorker){
+      try{
+        _epsWorker = new Worker('eps-worker.js');
+      }catch(e){
+        reject(new Error('Web Worker kon niet gestart worden: '+e.message));
+        return;
+      }
     }
-  );
-  if(!resp.ok){
-    let msg = 'Conversie mislukt';
-    try{ const j = await resp.json(); msg = j.error || msg; }catch{}
-    throw new Error(msg);
-  }
-  return await resp.arrayBuffer();
+    const id = ++_epsConvertId;
+    function handler(e){
+      if(e.data.id !== id) return;
+      if(e.data.type === 'status'){
+        // Progress update — refresh the toast
+        if(window.toast) toast(e.data.msg, 'info', 20000);
+        return;
+      }
+      _epsWorker.removeEventListener('message', handler);
+      _epsWorker.removeEventListener('error', errHandler);
+      if(e.data.type === 'error'){
+        reject(new Error(e.data.msg));
+      } else {
+        resolve(e.data.pdf);  // ArrayBuffer
+      }
+    }
+    function errHandler(e){
+      _epsWorker.removeEventListener('message', handler);
+      _epsWorker.removeEventListener('error', errHandler);
+      reject(new Error('Worker fout: '+(e.message||'onbekend')));
+    }
+    _epsWorker.addEventListener('message', handler);
+    _epsWorker.addEventListener('error', errHandler);
+    // Transfer the buffer to the worker (zero-copy)
+    _epsWorker.postMessage({ id:id, epsData:arrayBuf }, [arrayBuf]);
+  });
 }
 
 function handleFiles(files){
@@ -1214,8 +1232,8 @@ function handleFiles(files){
       };
       reader.readAsText(file);
     } else if(ext==='eps'){
-      // EPS: try local embedded-PDF extraction first, then server-side
-      // Ghostscript conversion for EPS without embedded PDF.
+      // EPS: try fast embedded-PDF extraction first, then full Ghostscript
+      // WASM conversion in a Web Worker for EPS without embedded PDF.
       const reader = new FileReader();
       reader.onload = async ev=>{
         const buf = ev.target.result;
@@ -1224,15 +1242,15 @@ function handleFiles(files){
           loadPdfAsImage(pdfBuf, file.name);
           return;
         }
-        // No embedded PDF — convert via Edge Function (Ghostscript WASM)
-        toast('EPS wordt geconverteerd…', 'info', 30000);
+        // No embedded PDF — convert client-side via Ghostscript WASM
+        toast('EPS wordt geconverteerd (eerste keer laden ~16 MB)…', 'info', 60000);
         try {
-          const convertedPdf = await _convertEpsServer(buf);
+          const convertedPdf = await _convertEpsClient(buf);
           loadPdfAsImage(convertedPdf, file.name);
           toast('EPS geconverteerd', 'success', 3000);
         } catch(err){
-          console.error('[GSB] EPS server conversion error:', err);
-          toast('EPS conversie mislukt: ' + (err.message||'onbekende fout') + '. Probeer het bestand als PDF op te slaan.', 'warn', 8000);
+          console.error('[GSB] EPS WASM conversion error:', err);
+          toast('EPS conversie mislukt: ' + (err.message||'onbekende fout') + '. Probeer het bestand als PDF of AI op te slaan.', 'warn', 8000);
         }
       };
       reader.readAsArrayBuffer(file);
