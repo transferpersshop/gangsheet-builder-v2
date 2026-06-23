@@ -29,7 +29,7 @@ function _loadFactory(){
     }
   }
   if(typeof _factory !== 'function'){
-    throw new Error('Ghostscript WASM module factory niet gevonden');
+    throw new Error('EPS-conversie kon niet gestart worden');
   }
 }
 
@@ -57,7 +57,7 @@ async function convertEpsToPdf(epsBytes){
     '-sOutputFile=/output.pdf',
     '/input.eps'
   ]);
-  if(exit !== 0) throw new Error('Ghostscript fout (exit code '+exit+')');
+  if(exit !== 0) throw new Error('EPS-conversie mislukt (code '+exit+')');
 
   // Read the resulting PDF
   const pdf = M.FS.readFile('/output.pdf');
@@ -73,9 +73,8 @@ async function convertEpsToPdf(epsBytes){
 self.onmessage = async function(e){
   var id = e.data.id;
   try{
-    self.postMessage({ id:id, type:'status', msg:'Ghostscript WASM laden…' });
+    self.postMessage({ id:id, type:'status', msg:'EPS voorbereiden…' });
     var pdf = await convertEpsToPdf(new Uint8Array(e.data.epsData));
-    self.postMessage({ id:id, type:'status', msg:'EPS geconverteerd' });
     // Transfer the ArrayBuffer for zero-copy performance
     self.postMessage({ id:id, type:'done', pdf:pdf.buffer }, [pdf.buffer]);
   }catch(err){

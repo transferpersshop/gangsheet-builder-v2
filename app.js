@@ -1184,8 +1184,7 @@ function _convertEpsClient(arrayBuf){
     function handler(e){
       if(e.data.id !== id) return;
       if(e.data.type === 'status'){
-        // Progress update — refresh the toast
-        if(window.toast) toast(e.data.msg, 'info', 20000);
+        // Silently ignore worker status — main thread shows its own toast
         return;
       }
       _epsWorker.removeEventListener('message', handler);
@@ -1214,12 +1213,16 @@ function handleFiles(files){
     const ext = file.name.split('.').pop().toLowerCase();
     if(type==='image/svg+xml' || ext==='svg'){
       const reader = new FileReader();
-      reader.onload = ev=>loadSvg(ev.target.result, file.name);
+      reader.onload = ev=>{
+        showLogoLoading(`"${file.name}" laden…`);
+        loadSvg(ev.target.result, file.name);
+      };
       reader.readAsText(file);
     } else if(ext==='ai'){
       // AI files: try SVG first (some are SVG), then try PDF rendering.
       const reader = new FileReader();
       reader.onload = ev=>{
+        showLogoLoading(`"${file.name}" laden…`);
         const text = ev.target.result;
         if(text.indexOf('<svg') !== -1){
           loadSvg(text, file.name);
@@ -1243,12 +1246,13 @@ function handleFiles(files){
           return;
         }
         // No embedded PDF — convert client-side via Ghostscript WASM
-        toast('EPS wordt geconverteerd (eerste keer laden ~16 MB)…', 'info', 60000);
+        showLogoLoading('EPS wordt geconverteerd…');
         try {
           const convertedPdf = await _convertEpsClient(buf);
+          hideLogoLoading();
           loadPdfAsImage(convertedPdf, file.name);
-          toast('EPS geconverteerd', 'success', 3000);
         } catch(err){
+          hideLogoLoading();
           console.error('[GSB] EPS WASM conversion error:', err);
           toast('EPS conversie mislukt: ' + (err.message||'onbekende fout') + '. Probeer het bestand als PDF of AI op te slaan.', 'warn', 8000);
         }
@@ -1266,9 +1270,13 @@ function handleFiles(files){
         const dpi = extractDpiFromArrayBuffer(buf, type);
         const blob = new Blob([buf], { type });
         const url = URL.createObjectURL(blob);
+        showLogoLoading(`"${file.name}" laden…`);
         loadRaster(url, file.name, dpi);
       };
       reader.readAsArrayBuffer(file);
+    } else if(ext==='gsb' || ext==='json'){
+      // GSB project file — import
+      window.gsbImportProject(file);
     } else {
       toast(`${t('unsupportedFile')}: ${file.name}`, 'error');
     }
@@ -1296,6 +1304,7 @@ function loadRaster(dataUrl, name, dpi){
         targetMmH = targetMmW * (ch / cw);
       }
       placeImage(cropped, name, targetMmW, targetMmH, cw, ch);
+      hideLogoLoading();
     });
     // Revoke object URL to free memory
     if(dataUrl.startsWith('blob:')) URL.revokeObjectURL(dataUrl);
@@ -1583,7 +1592,7 @@ async function loadPdfAsImage(arrayBuffer, name){
   const bufferForSvg = arrayBuffer.slice(0);
   const bufferForRaster = arrayBuffer.slice(0);
 
-  toast(t('loadingVector'), 'info', 3000);
+  showLogoLoading(name ? `"${name}" laden…` : 'Logo laden…');
 
   // --- Step 1: Convert to SVG and detect gradients ---
   let svgText = null, pdfHasGradients = false, svgPathCount = 0, pdfTooManyPaths = false;
@@ -1605,6 +1614,7 @@ async function loadPdfAsImage(arrayBuffer, name){
   // --- PATH A: No gradients, not too many paths, valid SVG → editable SVG group ---
   if(svgPathCount > 0 && !pdfHasGradients && !pdfTooManyPaths){
     console.log(`[GSB] "${name}": no gradients, loading as editable SVG`);
+    hideLogoLoading();
     loadSvg(svgText, name);
     // Store export buffer + original page dims after loadSvg places the object
     const _pdfPW = pdfPageW, _pdfPH = pdfPageH;
@@ -1692,11 +1702,13 @@ async function loadPdfAsImage(arrayBuffer, name){
         pdfSourceBuffers.set(cropped._originalId, bufferForExport);
         cropped._pdfPageW = pdfPageW;
         cropped._pdfPageH = pdfPageH;
+        hideLogoLoading();
         console.log(`[GSB] PDF/AI "${name}" loaded as display-only (gradient), buffer stored, page=${pdfPageW}×${pdfPageH}`);
       });
     }, { crossOrigin:'anonymous' });
     /* gradient toast removed — color editor shows inline hint instead */
   } catch(err2){
+    hideLogoLoading();
     console.error('PDF/AI load failed:', err2);
     toast(`⚠️ "${name}": kon bestand niet openen.`, 'error', 6000);
   }
@@ -1768,6 +1780,7 @@ function loadSvg(svgText, name){
         targetMmH = targetMmW * (naturalH / naturalW);
       }
       placeImage(group, name, targetMmW, targetMmH, naturalW, naturalH);
+      hideLogoLoading();
       if(embeddedRaster){
         toast(`⚠️ "${name}": ${t('embeddedRasterWarn')}`, 'warn', 8000);
       }
@@ -5814,6 +5827,36 @@ function hideCanvasLoader(){
   if(el) el.classList.remove('active');
 }
 
+/* ── Logo loading overlay (centered on canvas) ── */
+let _logoLoadTimer = null;
+function showLogoLoading(text){
+  const ov = document.getElementById('logoLoadOverlay');
+  const tx = document.getElementById('logoLoadText');
+  const bar = document.getElementById('logoLoadBarFill');
+  if(!ov) return;
+  if(tx) tx.textContent = text || 'Logo laden…';
+  if(bar) bar.style.width = '0%';
+  ov.classList.add('active');
+  // Animate the bar in steps to give visual feedback
+  clearInterval(_logoLoadTimer);
+  let pct = 0;
+  _logoLoadTimer = setInterval(()=>{
+    pct += Math.random() * 12 + 3;
+    if(pct > 90) pct = 90; // Never reach 100 until hideLogoLoading
+    if(bar) bar.style.width = pct + '%';
+  }, 300);
+}
+function hideLogoLoading(){
+  clearInterval(_logoLoadTimer);
+  const ov = document.getElementById('logoLoadOverlay');
+  const bar = document.getElementById('logoLoadBarFill');
+  if(bar) bar.style.width = '100%';
+  setTimeout(()=>{
+    if(ov) ov.classList.remove('active');
+    if(bar) bar.style.width = '0%';
+  }, 350);
+}
+
 function toast(msg, type='info', ms=3000, toastId, dismissLabel){
   const el = document.createElement('div');
   el.className = 'toast ' + type + (ms === 0 ? ' sticky' : '');
@@ -6541,6 +6584,57 @@ window.gsbGetProjectData = function(){
   };
 };
 
+/* ── Offline project export/import ── */
+window.gsbExportProject = function(){
+  const data = window.gsbGetProjectData();
+  const payload = {
+    _gsb: true,
+    version: '2.5.0',
+    name: data.name,
+    sheetFormat: data.sheetFormat,
+    canvasJson: data.canvasJson,
+    logoCount: data.logoCount,
+    sheetCount: data.sheetCount,
+    savedAt: new Date().toISOString(),
+  };
+  const json = JSON.stringify(payload);
+  const blob = new Blob([json], { type:'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const safeName = (data.name || 'project').replace(/[^a-zA-Z0-9_\-\s]/g, '').trim().replace(/\s+/g, '-') || 'project';
+  a.href = url;
+  a.download = safeName + '.gsb';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast('Project opgeslagen als bestand', 'success');
+};
+
+window.gsbImportProject = function(file){
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if(!data._gsb || !data.canvasJson){
+        toast('Ongeldig projectbestand', 'error');
+        return;
+      }
+      window.gsbLoadProject({
+        id: null,
+        name: data.name || 'Geïmporteerd project',
+        sheet_format: data.sheetFormat,
+        canvas_json: data.canvasJson,
+      });
+    } catch(e){
+      console.error('[GSB] Import error:', e);
+      toast('Kan bestand niet lezen: ' + (e.message||'onbekende fout'), 'error');
+    }
+  };
+  reader.readAsText(file);
+};
+
 // Called by login-ui.js when loading a saved project
 window.gsbLoadProject = function(project){
   if(!project) return;
@@ -6632,4 +6726,8 @@ if(window.gsAuth){
   const app = document.getElementById('appContainer');
   if(app) app.style.display = '';
 }
+
+/* ── Expose functions for external scripts (text-editor.js etc.) ── */
+window.toast = toast;
+window.loadSvg = loadSvg;
 

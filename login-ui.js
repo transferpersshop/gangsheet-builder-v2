@@ -192,13 +192,12 @@ function openSaveDialog(){
   if(nameInput){
     nameInput.value = current.name || 'Naamloos project';
   }
-  document.getElementById('saveNameModal').style.display = '';
+  openModal('saveNameModal');
   setTimeout(() => { if(nameInput){ nameInput.focus(); nameInput.select(); } }, 80);
 }
 
 function closeSaveDialog(){
-  const m = document.getElementById('saveNameModal');
-  if(m) m.style.display = 'none';
+  closeModal('saveNameModal');
 }
 
 async function confirmSave(){
