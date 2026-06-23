@@ -18,7 +18,7 @@ const I18N = {
     clear:'Leegmaken', clearSheet:'Vel leegmaken',
     step1:'Kies vel formaat', step2:"Upload logo's", step3:"Logo's bewerken", step4:"Logo's bewerken",
     sheetFormat:'Vel formaat',
-    dropTitle:'Klik of sleep hier', dropHint:'SVG, AI, PDF, PNG, JPG', dropMax:'Max. 50 MB',
+    dropTitle:'Klik of sleep hier', dropHint:'SVG, AI, PDF, EPS, PNG, JPG', dropMax:'Max. 50 MB',
     uploadTip:'Gebruik vectorbestanden (SVG, AI, PDF) of PNGs met transparante achtergrond van minimaal 300 dpi voor de scherpste prints.',
     uploadTipLink:'Bekijk onze tips',
     loadingVector:'Vector wordt verwerkt…', logoAdded:'toegevoegd',
@@ -168,7 +168,7 @@ const I18N = {
     clear:'Clear', clearSheet:'Clear sheet',
     step1:'Choose sheet format', step2:'Upload logos', step3:'Edit logos', step4:'Edit logos',
     sheetFormat:'Sheet format',
-    dropTitle:'Click or drop files', dropHint:'SVG, AI, PDF, PNG, JPG', dropMax:'Max. 50 MB',
+    dropTitle:'Click or drop files', dropHint:'SVG, AI, PDF, EPS, PNG, JPG', dropMax:'Max. 50 MB',
     uploadTip:'Use vector files (SVG, AI, PDF) or PNGs with transparent background of at least 300 dpi for the sharpest prints.',
     uploadTipLink:'View our tips',
     loadingVector:'Processing vector file…', logoAdded:'added',
@@ -351,6 +351,16 @@ let idCounter = 0;
 // preserving 100% of vector content including gradients, patterns, and text.
 const pdfSourceBuffers = new Map();
 
+// Shared SVG source strings keyed by _originalId.
+// Instead of storing _svgSource on every Fabric object (400 copies = 400 identical strings),
+// we store one copy here and look it up when needed (export, recolor).
+// Saves ~100s of MB with many logo copies.
+const svgSourceStore = new Map();
+/** Lookup SVG source: object-level override first, then shared store. */
+function getSvgSource(obj) {
+  return obj._svgSource || (obj._originalId && svgSourceStore.get(obj._originalId)) || null;
+}
+
 const state = {
   sheetFormat: 'dtf55',  // active format key
   sheet: { id: 'dtf-roll', w: ROLL_WIDTH_MM, h: DEFAULT_LENGTH_MM },
@@ -410,10 +420,32 @@ const undoRedoStack = {
 let _isLoadingState = false;       // guard: don't record while restoring
 let _preTransformSnap = null;      // snapshot taken before drag/scale/rotate
 
+function _snapshotSvgSources() {
+  // Capture current svgSource per _originalId for undo restore.
+  // Only stores entries that exist — typically a few KB instead of hundreds of MB.
+  const snap = {};
+  svgSourceStore.forEach((val, key) => { snap[key] = val; });
+  // Also capture any per-object overrides (recolored copies)
+  canvas.getObjects().forEach(o => {
+    if(o._svgSource && o._originalId) snap[o._originalId] = o._svgSource;
+  });
+  return snap;
+}
+
+function _restoreSvgSources(snap) {
+  if(!snap) return;
+  Object.entries(snap).forEach(([key, val]) => svgSourceStore.set(key, val));
+  // Re-attach to objects that need it
+  canvas.getObjects().forEach(o => {
+    if(o._originalId && snap[o._originalId]) o._svgSource = snap[o._originalId];
+  });
+}
+
 function pushUndo() {
   if(_isLoadingState) return;
-  const json = JSON.stringify(canvas.toJSON(FABRIC_EXTRA_PROPS));
-  undoRedoStack.undo.push(json);
+  const json = JSON.stringify(canvas.toJSON(FABRIC_UNDO_PROPS));
+  const svgSnap = _snapshotSvgSources();
+  undoRedoStack.undo.push({ json, svgSnap });
   if(undoRedoStack.undo.length > undoRedoStack.maxStates) undoRedoStack.undo.shift();
   undoRedoStack.redo = [];          // new action kills redo branch
   undoRedoStack._statsDirty = true;
@@ -422,26 +454,30 @@ function pushUndo() {
 
 function undo() {
   if(undoRedoStack.undo.length === 0) return;
-  const current = JSON.stringify(canvas.toJSON(FABRIC_EXTRA_PROPS));
+  const currentJson = JSON.stringify(canvas.toJSON(FABRIC_UNDO_PROPS));
+  const currentSvg = _snapshotSvgSources();
   const prev = undoRedoStack.undo.pop();
-  undoRedoStack.redo.push(current); // save current so redo can get back
-  loadCanvasState(prev);
+  undoRedoStack.redo.push({ json: currentJson, svgSnap: currentSvg });
+  loadCanvasState(prev.json, prev.svgSnap);
   updateUndoRedoButtons();
 }
 
 function redo() {
   if(undoRedoStack.redo.length === 0) return;
-  const current = JSON.stringify(canvas.toJSON(FABRIC_EXTRA_PROPS));
+  const currentJson = JSON.stringify(canvas.toJSON(FABRIC_UNDO_PROPS));
+  const currentSvg = _snapshotSvgSources();
   const next = undoRedoStack.redo.pop();
-  undoRedoStack.undo.push(current); // push current without clearing redo
-  loadCanvasState(next);
+  undoRedoStack.undo.push({ json: currentJson, svgSnap: currentSvg });
+  loadCanvasState(next.json, next.svgSnap);
   updateUndoRedoButtons();
 }
 
-function loadCanvasState(jsonStr) {
+function loadCanvasState(jsonStr, svgSnap) {
   _isLoadingState = true;
   invalidateAllThumbs();
   canvas.loadFromJSON(jsonStr, () => {
+    // Re-attach SVG sources from snapshot
+    if(svgSnap) _restoreSvgSources(svgSnap);
     canvas.getObjects().forEach(o => attachObjListeners(o));
     canvas.renderAll();
     _isLoadingState = false;
@@ -470,18 +506,25 @@ const canvas = new fabric.Canvas('canvas', {
   selection: true,
 });
 
+// Props serialized with canvas.toJSON — used by undo, clone, and export.
+// NOTE: _svgSource is EXCLUDED from undo serialization (FABRIC_UNDO_PROPS) to save
+// ~100s of MB. It's stored in svgSourceStore keyed by _originalId and re-attached
+// after undo/redo restore. Full list (FABRIC_EXTRA_PROPS) is used for export/clone.
 const FABRIC_EXTRA_PROPS = [
   '_id','_originalId','_name','_naturalW','_naturalH',
   '_mmW','_mmH','_mmLeft','_mmTop','_isFillTile','_svgSource',
   '_embeddedRasterW','_embeddedRasterH','_vectorOrigin','_recolored','_hasGradients',
   '_pdfPageW','_pdfPageH'
 ];
+const FABRIC_UNDO_PROPS = FABRIC_EXTRA_PROPS.filter(p => p !== '_svgSource');
 
 /* Capture state BEFORE any interactive transform starts.
    The snapshot is pushed to the undo stack when 'modified' fires. */
+let _preTransformSvgSnap = null;
 canvas.on('before:transform', () => {
   if(!_isLoadingState){
-    _preTransformSnap = JSON.stringify(canvas.toJSON(FABRIC_EXTRA_PROPS));
+    _preTransformSnap = JSON.stringify(canvas.toJSON(FABRIC_UNDO_PROPS));
+    _preTransformSvgSnap = _snapshotSvgSources();
   }
 });
 
@@ -491,11 +534,12 @@ function attachObjListeners(o){
     syncMmFromPx(o);
     // Push the PRE-transform snapshot (state before drag/scale/rotate)
     if(_preTransformSnap && !_isLoadingState){
-      undoRedoStack.undo.push(_preTransformSnap);
+      undoRedoStack.undo.push({ json: _preTransformSnap, svgSnap: _preTransformSvgSnap });
       if(undoRedoStack.undo.length > undoRedoStack.maxStates) undoRedoStack.undo.shift();
       undoRedoStack.redo = [];
       undoRedoStack._statsDirty = true;
       _preTransformSnap = null;
+      _preTransformSvgSnap = null;
       updateUndoRedoButtons();
     }
   });
@@ -1083,6 +1127,40 @@ function extractDpiFromArrayBuffer(buf, mimeType){
   return null;
 }
 
+/* ── EPS: extract embedded PDF stream ──
+   Modern EPS files (from Illustrator, CorelDRAW, etc.) often contain a full
+   PDF representation between %%BeginDocument / %%EndDocument or simply
+   contain the %PDF- marker followed by valid PDF data. This function scans
+   the raw bytes for the PDF signature and extracts the PDF portion. */
+function _extractPdfFromEps(arrayBuf){
+  const bytes = new Uint8Array(arrayBuf);
+  // Look for %PDF- signature (hex: 25 50 44 46 2D)
+  let pdfStart = -1;
+  for(let i = 0; i < bytes.length - 5; i++){
+    if(bytes[i]===0x25 && bytes[i+1]===0x50 && bytes[i+2]===0x44 &&
+       bytes[i+3]===0x46 && bytes[i+4]===0x2D){
+      pdfStart = i;
+      break;
+    }
+  }
+  if(pdfStart < 0) return null;
+  // Look for %%EOF (the PDF end marker) searching backwards from end
+  let pdfEnd = -1;
+  for(let i = bytes.length - 6; i >= pdfStart; i--){
+    if(bytes[i]===0x25 && bytes[i+1]===0x25 && bytes[i+2]===0x45 &&
+       bytes[i+3]===0x4F && bytes[i+4]===0x46){
+      pdfEnd = i + 5;
+      // Include trailing whitespace/newline after %%EOF
+      while(pdfEnd < bytes.length && (bytes[pdfEnd]===0x0A || bytes[pdfEnd]===0x0D)) pdfEnd++;
+      break;
+    }
+  }
+  if(pdfEnd < 0) pdfEnd = bytes.length;
+  if(pdfEnd - pdfStart < 100) return null; // too small to be valid
+  console.log(`[GSB] EPS: extracted embedded PDF (${pdfStart}..${pdfEnd}, ${pdfEnd - pdfStart} bytes)`);
+  return arrayBuf.slice(pdfStart, pdfEnd);
+}
+
 function handleFiles(files){
   [...files].forEach(file=>{
     const type = file.type;
@@ -1106,6 +1184,20 @@ function handleFiles(files){
         }
       };
       reader.readAsText(file);
+    } else if(ext==='eps'){
+      // EPS files: try to extract embedded PDF stream (most modern EPS from
+      // Illustrator/CorelDRAW contain a full PDF representation).
+      const reader = new FileReader();
+      reader.onload = ev=>{
+        const buf = ev.target.result;
+        const pdfBuf = _extractPdfFromEps(buf);
+        if(pdfBuf){
+          loadPdfAsImage(pdfBuf, file.name);
+        } else {
+          toast(`EPS zonder embedded PDF — sla het bestand op als PDF of AI en upload opnieuw.`, 'warn', 6000);
+        }
+      };
+      reader.readAsArrayBuffer(file);
     } else if(type==='application/pdf' || ext==='pdf'){
       const reader = new FileReader();
       reader.onload = ev=>loadPdfAsImage(ev.target.result, file.name);
@@ -1408,7 +1500,7 @@ async function pdfToSvg(arrayBuffer){
 
   // Build SVG — coordinates are already converted from PDF (Y-up) to SVG (Y-down)
   const svgText=[
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${fmtN(W)} ${fmtN(H)}" width="${fmtN(W)}" height="${fmtN(H)}">`,
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${fmtN(W)} ${fmtN(H)}" width="${fmtN(W)}pt" height="${fmtN(H)}pt">`,
     ...elements,
     ...textElements,
     '</svg>'
@@ -1810,6 +1902,8 @@ function placeImage(obj, name, mmW, mmH, naturalW, naturalH){
   obj._naturalH = naturalH;
   obj._mmW = mmW;
   obj._mmH = mmH;
+  // Store SVG source in shared store (dedup for undo snapshots + clones)
+  if(obj._svgSource) svgSourceStore.set(id, obj._svgSource);
   obj._mmLeft = spot.x;
   obj._mmTop  = spot.y;
   obj.set({ originX:'left', originY:'top' });
@@ -2213,12 +2307,13 @@ function overlapsAny(x,y,w,h){
 
 function calcEffectiveDpi(obj){
   // Pure vector SVG without embedded raster → infinite resolution.
-  // Check _svgSource regardless of type: after rasterization for canvas
-  // performance, clones are fabric.Image (type 'image') but still vector
-  // for export purposes because _svgSource is preserved.
-  if(obj._svgSource && !obj._embeddedRasterW) return Infinity;
+  // Check _svgSource (or svgSourceStore fallback) regardless of type: after
+  // rasterization for canvas performance, clones are fabric.Image but still
+  // vector for export because the SVG source is in svgSourceStore.
+  const svgSrc = getSvgSource(obj);
+  if(svgSrc && !obj._embeddedRasterW) return Infinity;
   // SVG with embedded raster → DPI based on the raster dimensions vs print size.
-  if(obj._svgSource && obj._embeddedRasterW){
+  if(svgSrc && obj._embeddedRasterW){
     return (obj._embeddedRasterW / obj._mmW) * MM_PER_INCH;
   }
   // PDF/AI rendered as raster but originally vector → treat as infinite DPI.
@@ -2537,6 +2632,7 @@ function recolorSvgPaths(group, oldHex, newHex, tolerance){
       });
 
       group._svgSource = new XMLSerializer().serializeToString(doc.documentElement);
+      if(group._originalId) svgSourceStore.set(group._originalId, group._svgSource);
     } catch(e){
       console.warn('[GSB] Failed to update _svgSource colors:', e);
     }
@@ -2672,8 +2768,9 @@ function propagateRecolorToSiblings(primaryObj, oldHex, newHex){
       };
       // Update _svgSource so PDF export reflects the color change
       // Use tolerance: raster colors may not exactly match SVG source colors
-      if(sib._svgSource){
-        sib._svgSource = recolorSvgSourceString(sib._svgSource, oldHex, newHex, RASTER_COLOR_TOLERANCE);
+      const sibSvg = getSvgSource(sib);
+      if(sibSvg){
+        sib._svgSource = recolorSvgSourceString(sibSvg, oldHex, newHex, RASTER_COLOR_TOLERANCE);
         sib._recolored = true;
       }
 
@@ -2719,8 +2816,9 @@ function makeLogoMonochrome(targetHex){
       _monoRasterInPlace(copy, targetHex);
     }
     // Comprehensive _svgSource rewrite for PDF export
-    if(copy._svgSource){
-      copy._svgSource = _makeMonoSvgSource(copy._svgSource, targetHex);
+    const copySvg = getSvgSource(copy);
+    if(copySvg){
+      copy._svgSource = _makeMonoSvgSource(copySvg, targetHex);
       copy._recolored = true;
     }
   });
@@ -3037,8 +3135,9 @@ function recolorRaster(obj, oldHex, newHex){
 
     // Update _svgSource with the new color so PDF export reflects the change
     // Use tolerance: raster-extracted colors may not exactly match SVG source hex values
-    if(obj._svgSource){
-      newImg._svgSource = recolorSvgSourceString(obj._svgSource, oldHex, newHex, RASTER_COLOR_TOLERANCE);
+    const objSvg = getSvgSource(obj);
+    if(objSvg){
+      newImg._svgSource = recolorSvgSourceString(objSvg, oldHex, newHex, RASTER_COLOR_TOLERANCE);
       newImg._recolored = true;
     }
 
@@ -4231,7 +4330,6 @@ function changeGroupCount(originalId, targetCount){
   const srcProps = {
     _originalId: liveSample._originalId, _name: liveSample._name,
     _naturalW: liveSample._naturalW, _naturalH: liveSample._naturalH,
-    _svgSource: liveSample._svgSource,
     _hasGradients: liveSample._hasGradients,
     _embeddedRasterW: liveSample._embeddedRasterW,
     _embeddedRasterH: liveSample._embeddedRasterH,
@@ -4280,6 +4378,9 @@ function changeGroupCount(originalId, targetCount){
     return;
   }
 
+  // --- Performance: disable auto-render during batch add ---
+  canvas.renderOnAddRemove = false;
+
   // --- Performance: rasterize SVG groups to PNG for fast cloning ---
   const isGroup = liveSample.type === 'group';
   const rasterScale = 2;
@@ -4299,7 +4400,6 @@ function changeGroupCount(originalId, targetCount){
             img._name = srcProps._name;
             img._naturalW = srcProps._naturalW;
             img._naturalH = srcProps._naturalH;
-            if(srcProps._svgSource) img._svgSource = srcProps._svgSource;
             if(srcProps._hasGradients) img._hasGradients = srcProps._hasGradients;
             if(srcProps._embeddedRasterW) img._embeddedRasterW = srcProps._embeddedRasterW;
             if(srcProps._embeddedRasterH) img._embeddedRasterH = srcProps._embeddedRasterH;
@@ -4328,7 +4428,6 @@ function changeGroupCount(originalId, targetCount){
           obj._naturalW = srcProps._naturalW;
           obj._naturalH = srcProps._naturalH;
           fabric.util.enlivenObjects([obj], ([clone]) => {
-            if(srcProps._svgSource) clone._svgSource = srcProps._svgSource;
             if(srcProps._hasGradients) clone._hasGradients = srcProps._hasGradients;
             if(srcProps._vectorOrigin) clone._vectorOrigin = srcProps._vectorOrigin;
             if(srcProps._embeddedRasterW) clone._embeddedRasterW = srcProps._embeddedRasterW;
@@ -4358,6 +4457,7 @@ function changeGroupCount(originalId, targetCount){
           setTimeout(nextBatch, 0);
         } else {
           if(delta > 10 && !state.manualMode) showCanvasLoader(95, 'Indeling optimaliseren');
+          canvas.renderOnAddRemove = true; // restore after batch
           canvas.requestRenderAll();
           autoExtendIfNeeded();
           shrinkDTF();
@@ -4511,7 +4611,8 @@ function removeWhiteBg(obj, threshold){
     newImg._mmTop = obj._mmTop;
     // Preserve vector-origin flag so DPI stays correct after bg removal
     if(obj._vectorOrigin) newImg._vectorOrigin = obj._vectorOrigin;
-    if(obj._svgSource) newImg._svgSource = obj._svgSource;
+    const bgSvg = getSvgSource(obj);
+    if(bgSvg) newImg._svgSource = bgSvg;
     if(obj._hasGradients) newImg._hasGradients = obj._hasGradients;
     if(obj._embeddedRasterW) newImg._embeddedRasterW = obj._embeddedRasterW;
     if(obj._embeddedRasterH) newImg._embeddedRasterH = obj._embeddedRasterH;
@@ -4674,6 +4775,9 @@ function tileSheet(){
   if(!sample){ toast(t('logoGone'),'error'); state.fillTemplate = null; return; }
   ft.sampleObj = sample;
 
+  // --- Performance: disable auto-render during batch remove/add ---
+  canvas.renderOnAddRemove = false;
+
   // Clear ALL copies/tiles of this logo — keep OTHER logos intact
   const toRemove = canvas.getObjects().filter(o=>
     o._originalId === ft.originalId
@@ -4734,6 +4838,7 @@ function tileSheet(){
   const rasterH = Math.round(natH * (sample.scaleY || 1) * rasterScale);
 
   const finishTiling = ()=>{
+    canvas.renderOnAddRemove = true; // restore after batch
     canvas.requestRenderAll();
     autoExtendIfNeeded();
 
@@ -4776,7 +4881,6 @@ function tileSheet(){
             img._naturalW = ft.naturalW;
             img._naturalH = ft.naturalH;
             img._isFillTile = true;
-            if(sample._svgSource) img._svgSource = sample._svgSource;
             if(sample._hasGradients) img._hasGradients = sample._hasGradients;
             if(sample._vectorOrigin) img._vectorOrigin = sample._vectorOrigin;
             if(sample._pdfPageW) img._pdfPageW = sample._pdfPageW;
@@ -4827,7 +4931,6 @@ function tileSheet(){
         clone._naturalH = ft.naturalH;
         clone._isFillTile = true;
         // Explicitly preserve vector properties — enlivenObjects may drop custom _ props
-        if(sample._svgSource) clone._svgSource = sample._svgSource;
         if(sample._hasGradients) clone._hasGradients = sample._hasGradients;
         if(sample._vectorOrigin) clone._vectorOrigin = sample._vectorOrigin;
         if(sample._embeddedRasterW) clone._embeddedRasterW = sample._embeddedRasterW;
@@ -5119,9 +5222,10 @@ async function runPdfExport(withBackground = false){
       //   - Recolored AI/PDF logos
       // Track 2 (embedPdf) embeds the ORIGINAL uncropped PDF page, which causes
       // squished logos when the artboard is larger than the content.
-      if(canDoSvgVector && s._svgSource && !s._embeddedRasterW){
+      const sSvgSrc = getSvgSource(s);
+      if(canDoSvgVector && sSvgSrc && !s._embeddedRasterW){
         vectorSvgIds.add(oid);
-      } else if(pdfSourceBuffers.has(oid) && !s._recolored && !s._svgSource){
+      } else if(pdfSourceBuffers.has(oid) && !s._recolored && !sSvgSrc){
         // AI/PDF PATH B: gradient logo, no _svgSource available.
         // embedPdf is the only way to preserve gradient/pattern fidelity.
         // Check if content is significantly smaller than artboard → fall back to raster.
@@ -5293,7 +5397,7 @@ async function runPdfExport(withBackground = false){
 
       for(const oid of vectorSvgIds){
         const grp = uniqueLogos.get(oid);
-        const svgText = grp.sample._svgSource;
+        const svgText = getSvgSource(grp.sample);
         if(!svgText){ rasterIds.add(oid); continue; }
 
         let embeddedPage = null;
@@ -6362,4 +6466,114 @@ tourSkipBtn.onclick = endTour;
 tourBackdrop.onclick = (e)=>{
   if(e.target === tourBackdrop) endTour();
 };
+
+/* =========================================================
+   AUTH INTEGRATION + PROJECT SAVE/LOAD
+   ========================================================= */
+let _currentProjectId = null;
+
+// Called by login-ui.js when user clicks "Save current project"
+window.gsbGetProjectData = function(){
+  const objs = canvas.getObjects().filter(o => o._mmW);
+  return {
+    id: _currentProjectId,
+    name: document.getElementById('projectTitleInput')?.value || 'Naamloos project',
+    sheetFormat: state.sheetFormat,
+    canvasJson: canvas.toJSON(FABRIC_EXTRA_PROPS),
+    logoCount: new Set(objs.map(o => o._originalId)).size,
+    sheetCount: 1,
+  };
+};
+
+// Called by login-ui.js when loading a saved project
+window.gsbLoadProject = function(project){
+  if(!project) return;
+  _currentProjectId = project.id;
+  // Set project title
+  const inp = document.getElementById('projectTitleInput');
+  if(inp) inp.value = project.name || '';
+  // Set format
+  if(project.sheet_format && SHEET_FORMATS[project.sheet_format]){
+    state.sheetFormat = project.sheet_format;
+    document.querySelectorAll('#formatPicker .format-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.format === project.sheet_format);
+    });
+    const fmt = SHEET_FORMATS[project.sheet_format];
+    state.sheet.w = fmt.w; state.sheet.h = fmt.h;
+    resizeSheet();
+  }
+  // Load canvas state
+  if(project.canvas_json && typeof project.canvas_json === 'object'){
+    _isLoadingState = true;
+    const jsonStr = JSON.stringify(project.canvas_json);
+    canvas.loadFromJSON(jsonStr, () => {
+      _isLoadingState = false;
+      canvas.getObjects().forEach(o => {
+        attachObjListeners(o);
+        // Restore SVG source from store if available
+        if(o._originalId && svgSourceStore.has(o._originalId) && !o._svgSource){
+          o._svgSource = svgSourceStore.get(o._originalId);
+        }
+      });
+      canvas.requestRenderAll();
+      renderItemList();
+      updateInfoBar();
+      updateSummary();
+      pushUndo();
+      toast(`Project "${project.name}" geladen`, 'success');
+    }, (o, obj) => {
+      // reviver: restore custom props
+    });
+  }
+};
+
+window.gsbSetProjectId = function(id){ _currentProjectId = id; };
+
+// Apply user preferences after login
+if(window.gsAuth){
+  gsAuth.onReady(() => {
+    const p = gsAuth.profile;
+    if(!p) return;
+    // Apply preferred unit
+    if(p.preferred_unit && p.preferred_unit !== state.unit){
+      state.unit = p.preferred_unit;
+      document.querySelectorAll('#unitToggle button').forEach(b => {
+        b.classList.toggle('active', b.dataset.unit === p.preferred_unit);
+      });
+      syncGapUI();
+    }
+    // Apply preferred language
+    if(p.preferred_lang && p.preferred_lang !== state.lang){
+      state.lang = p.preferred_lang;
+      applyI18n();
+      document.querySelectorAll('#langSwitch button').forEach(b => {
+        b.classList.toggle('active', b.dataset.lang === p.preferred_lang);
+      });
+    }
+  });
+}
+
+// Log exports for usage tracking
+const _origExportPdf = typeof exportPdf === 'function' ? exportPdf : null;
+if(_origExportPdf){
+  // Wrap exportPdf to log usage (non-blocking)
+  // Note: exportPdf is called directly by onclick, so we hook via the button
+  const expBtn = document.getElementById('exportBtn');
+  if(expBtn){
+    const origClick = expBtn.onclick;
+    expBtn.onclick = function(e){
+      if(window.gsAuth?.logUsage) gsAuth.logUsage('export_pdf', { format: state.sheetFormat });
+      if(origClick) return origClick.call(this, e);
+    };
+  }
+}
+
+// Initialize auth on page load
+if(window.gsAuth){
+  gsAuth.init();
+} else {
+  // No auth available — show app directly
+  const app = document.getElementById('appContainer');
+  if(app) app.style.display = '';
+}
 

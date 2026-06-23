@@ -417,10 +417,152 @@ window.addEventListener('load', ()=>{
   @media (max-width: 600px){
     .zoom-bar .clear-btn-center{flex:1 1 100%;text-align:center}
   }
+
+  /* ── Login screen ── */
+  .login-screen{position:fixed;inset:0;z-index:9999;background:var(--gradient);display:flex;align-items:center;justify-content:center;padding:20px}
+  .login-card{background:#fff;border-radius:20px;padding:40px 36px 32px;width:100%;max-width:400px;box-shadow:0 20px 60px rgba(0,0,0,.2)}
+  .login-card .logo-wrap{text-align:center;margin-bottom:24px}
+  .login-card .logo-wrap img{height:36px}
+  .login-card h2{text-align:center;font-size:1.3rem;margin-bottom:4px}
+  .login-card .subtitle{text-align:center;color:var(--muted);font-size:.85rem;margin-bottom:24px}
+  .login-tabs{display:flex;background:var(--bg-subtle);border-radius:10px;padding:3px;margin-bottom:20px}
+  .login-tabs button{flex:1;border:none;background:transparent;padding:8px;border-radius:8px;font-size:.85rem;font-weight:700;color:var(--muted);font-family:'Nunito',sans-serif;cursor:pointer}
+  .login-tabs button.active{background:#fff;color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+  .login-field{margin-bottom:14px}
+  .login-field label{display:block;font-size:.8rem;font-weight:600;color:var(--muted);margin-bottom:4px}
+  .login-field input{width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:.9rem;outline:none;transition:border .15s}
+  .login-field input:focus{border-color:var(--primary)}
+  .login-submit{width:100%;padding:12px;border:none;border-radius:10px;background:var(--primary);color:#fff;font-size:.95rem;font-weight:700;font-family:'Nunito',sans-serif;cursor:pointer;margin-top:8px;transition:filter .15s}
+  .login-submit:hover{filter:brightness(1.08)}
+  .login-submit:disabled{opacity:.5;cursor:not-allowed}
+  .login-link{display:block;text-align:center;margin-top:12px;color:var(--primary);font-size:.82rem;cursor:pointer;background:none;border:none;font-family:'Inter',sans-serif}
+  .login-link:hover{text-decoration:underline}
+  .login-error{background:#fef2f2;color:var(--error);padding:10px 12px;border-radius:8px;font-size:.82rem;margin-bottom:14px;display:none}
+  .login-success{background:#f0fdf4;color:var(--success);padding:10px 12px;border-radius:8px;font-size:.82rem;margin-bottom:14px;display:none}
+
+  /* ── User menu ── */
+  .user-menu-wrap{position:relative}
+  .user-avatar{width:34px;height:34px;border-radius:50%;background:var(--secondary);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.85rem;cursor:pointer;border:none;font-family:'Nunito',sans-serif;transition:box-shadow .15s}
+  .user-avatar:hover{box-shadow:0 0 0 3px rgba(101,53,140,.2)}
+  .user-dropdown{position:absolute;right:0;top:calc(100% + 6px);background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.12);min-width:240px;padding:8px 0;display:none;z-index:100}
+  .user-dropdown.open{display:block}
+  .user-dropdown .ud-header{padding:12px 16px;border-bottom:1px solid var(--border)}
+  .user-dropdown .ud-name{font-weight:700;font-size:.9rem}
+  .user-dropdown .ud-email{font-size:.78rem;color:var(--muted)}
+  .user-dropdown .ud-item{display:flex;align-items:center;gap:10px;padding:10px 16px;font-size:.85rem;cursor:pointer;border:none;background:none;width:100%;text-align:left;font-family:'Inter',sans-serif;color:var(--text)}
+  .user-dropdown .ud-item:hover{background:var(--bg-light)}
+  .user-dropdown .ud-item svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .user-dropdown .ud-sep{height:1px;background:var(--border);margin:4px 0}
+  .user-dropdown .ud-item.danger{color:var(--error)}
+
+  /* ── Modal overlay (shared) ── */
+  .gsb-modal-backdrop{position:fixed;inset:0;z-index:5000;background:rgba(0,0,0,.4);display:none;align-items:center;justify-content:center;padding:20px}
+  .gsb-modal-backdrop.open{display:flex}
+  .gsb-modal{background:#fff;border-radius:16px;width:100%;max-width:800px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.15)}
+  .gsb-modal.wide{max-width:1000px}
+  .gsb-modal-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)}
+  .gsb-modal-head h3{font-size:1.1rem}
+  .gsb-modal-close{background:none;border:none;padding:4px;color:var(--muted);cursor:pointer}
+  .gsb-modal-close svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2}
+  .gsb-modal-body{flex:1;overflow-y:auto;padding:20px}
+  .gsb-modal-foot{padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px}
+
+  /* ── Admin panel tabs ── */
+  .admin-tabs{display:flex;gap:2px;background:var(--bg-subtle);border-radius:10px;padding:3px;margin-bottom:20px}
+  .admin-tabs button{flex:1;border:none;background:transparent;padding:8px 12px;border-radius:8px;font-size:.82rem;font-weight:700;color:var(--muted);cursor:pointer;font-family:'Nunito',sans-serif}
+  .admin-tabs button.active{background:#fff;color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+  .admin-tab-content{display:none}
+  .admin-tab-content.active{display:block}
+
+  /* ── Admin table ── */
+  .admin-table{width:100%;border-collapse:collapse;font-size:.82rem}
+  .admin-table th{text-align:left;padding:8px 10px;border-bottom:2px solid var(--border);font-weight:700;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.5px}
+  .admin-table td{padding:8px 10px;border-bottom:1px solid var(--border)}
+  .admin-table tr:hover td{background:var(--bg-light)}
+  .admin-table select{padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:.8rem}
+  .admin-table .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:.72rem;font-weight:700}
+  .admin-table .badge-admin{background:#ede9fe;color:var(--secondary)}
+  .admin-table .badge-user{background:var(--bg-light);color:var(--muted)}
+  .admin-table .badge-blocked{background:#fef2f2;color:var(--error)}
+  .admin-table .btn-sm{padding:4px 10px;font-size:.75rem;border-radius:6px}
+
+  /* ── Projects grid ── */
+  .projects-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px}
+  .project-card{background:#fff;border:1.5px solid var(--border);border-radius:12px;overflow:hidden;cursor:pointer;transition:border-color .15s,box-shadow .15s}
+  .project-card:hover{border-color:var(--primary);box-shadow:0 4px 12px rgba(29,154,175,.1)}
+  .project-card .pc-thumb{width:100%;aspect-ratio:4/3;background:var(--bg-subtle);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:.8rem}
+  .project-card .pc-thumb img{width:100%;height:100%;object-fit:cover}
+  .project-card .pc-info{padding:10px 12px}
+  .project-card .pc-name{font-weight:700;font-size:.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .project-card .pc-meta{font-size:.75rem;color:var(--muted);margin-top:2px}
+  .project-card .pc-actions{display:flex;justify-content:flex-end;padding:0 10px 10px;gap:6px}
+  .project-card .pc-actions button{padding:4px 10px;border:1px solid var(--border);background:#fff;border-radius:6px;font-size:.72rem;font-weight:600;cursor:pointer}
+  .project-card .pc-actions button:hover{background:var(--bg-light)}
+  .project-card .pc-actions button.danger{color:var(--error);border-color:#fecaca}
+  .project-card .pc-actions button.danger:hover{background:#fef2f2}
+
+  /* ── Profile form ── */
+  .profile-form .pf-field{margin-bottom:16px}
+  .profile-form .pf-field label{display:block;font-size:.8rem;font-weight:600;color:var(--muted);margin-bottom:4px}
+  .profile-form .pf-field input,.profile-form .pf-field select{width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:.85rem}
+
+  /* ── Stats cards ── */
+  .stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:20px}
+  .stat-card{background:var(--bg-light);border-radius:10px;padding:16px;text-align:center}
+  .stat-card .sc-val{font-size:1.6rem;font-weight:800;font-family:'Nunito',sans-serif;color:var(--primary)}
+  .stat-card .sc-label{font-size:.78rem;color:var(--muted);margin-top:2px}
+
+  /* ── Settings form ── */
+  .settings-form .sf-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)}
+  .settings-form .sf-label{flex:1;font-size:.85rem;font-weight:600}
+  .settings-form .sf-input{width:160px}
+  .settings-form .sf-input input,.settings-form .sf-input select{width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.82rem}
 </style>
 </head>
 <body>
-<div class="app">
+
+<!-- ═══ Login screen ═══ -->
+<div class="login-screen" id="loginScreen" style="display:none">
+  <div class="login-card">
+    <div class="logo-wrap"><img src="./logo-wit.svg" alt="Transferpersshop" style="height:32px;filter:none;background:linear-gradient(135deg,#1d9aaf,#65358c);padding:8px 16px;border-radius:8px"></div>
+    <h2>Gang Sheet Builder</h2>
+    <p class="subtitle">Log in om je projecten op te slaan en te beheren</p>
+    <div class="login-tabs">
+      <button class="active" onclick="gsLoginUI.showTab('login')">Inloggen</button>
+      <button onclick="gsLoginUI.showTab('register')">Registreren</button>
+    </div>
+    <div class="login-error" id="loginError"></div>
+    <div class="login-success" id="loginSuccess"></div>
+    <!-- Login form -->
+    <form id="loginForm" onsubmit="gsLoginUI.handleLogin(event)">
+      <div class="login-field"><label>E-mailadres</label><input type="email" id="loginEmail" required autocomplete="email"></div>
+      <div class="login-field"><label>Wachtwoord</label><input type="password" id="loginPassword" required autocomplete="current-password" minlength="6"></div>
+      <button type="submit" class="login-submit" id="loginBtn">Inloggen</button>
+      <button type="button" class="login-link" onclick="gsLoginUI.showTab('reset')">Wachtwoord vergeten?</button>
+    </form>
+    <!-- Register form -->
+    <form id="registerForm" style="display:none" onsubmit="gsLoginUI.handleRegister(event)">
+      <div class="login-field"><label>Naam</label><input type="text" id="regName" required autocomplete="name"></div>
+      <div class="login-field"><label>E-mailadres</label><input type="email" id="regEmail" required autocomplete="email"></div>
+      <div class="login-field"><label>Wachtwoord (min. 6 tekens)</label><input type="password" id="regPassword" required autocomplete="new-password" minlength="6"></div>
+      <button type="submit" class="login-submit" id="regBtn">Account aanmaken</button>
+      <button type="button" class="login-link" onclick="gsLoginUI.showTab('login')">Al een account? Inloggen</button>
+    </form>
+    <!-- Reset form -->
+    <form id="resetForm" style="display:none" onsubmit="gsLoginUI.handleReset(event)">
+      <div class="login-field"><label>E-mailadres</label><input type="email" id="resetEmail" required></div>
+      <button type="submit" class="login-submit">Herstelmail versturen</button>
+      <button type="button" class="login-link" onclick="gsLoginUI.showTab('login')">Terug naar inloggen</button>
+    </form>
+    <!-- Password reset confirm (shown after clicking link in email) -->
+    <form id="resetConfirmForm" style="display:none" onsubmit="gsLoginUI.handleResetConfirm(event)">
+      <div class="login-field"><label>Nieuw wachtwoord (min. 6 tekens)</label><input type="password" id="newPassword" required minlength="6"></div>
+      <button type="submit" class="login-submit">Wachtwoord opslaan</button>
+    </form>
+  </div>
+</div>
+
+<div class="app" id="appContainer" style="display:none">
 
   <header>
     <div class="header-brand">
@@ -439,6 +581,33 @@ window.addEventListener('load', ()=>{
       <div class="lang-switch" id="langSwitch">
         <button data-lang="nl" class="active">NL</button>
         <button data-lang="en">EN</button>
+      </div>
+      <!-- User menu -->
+      <div class="user-menu-wrap">
+        <button class="user-avatar" id="userAvatarBtn" onclick="gsLoginUI.toggleUserMenu()"><span id="userInitial">?</span></button>
+        <div class="user-dropdown" id="userDropdown">
+          <div class="ud-header">
+            <div class="ud-name" id="userMenuName">Gebruiker</div>
+            <div class="ud-email" id="userMenuEmail"></div>
+          </div>
+          <button class="ud-item" onclick="gsLoginUI.openProjects()">
+            <svg viewBox="0 0 24 24"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+            Mijn projecten
+          </button>
+          <button class="ud-item" onclick="gsLoginUI.openProfile()">
+            <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            Profiel bewerken
+          </button>
+          <button class="ud-item" id="adminPanelLink" style="display:none" onclick="gsLoginUI.openAdmin()">
+            <svg viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 00-2 2v.18a2 2 0 01-1 1.73l-.43.25a2 2 0 01-2 0l-.15-.08a2 2 0 00-2.73.73l-.22.38a2 2 0 00.73 2.73l.15.1a2 2 0 011 1.72v.51a2 2 0 01-1 1.74l-.15.09a2 2 0 00-.73 2.73l.22.38a2 2 0 002.73.73l.15-.08a2 2 0 012 0l.43.25a2 2 0 011 1.73V20a2 2 0 002 2h.44a2 2 0 002-2v-.18a2 2 0 011-1.73l.43-.25a2 2 0 012 0l.15.08a2 2 0 002.73-.73l.22-.39a2 2 0 00-.73-2.73l-.15-.08a2 2 0 01-1-1.74v-.5a2 2 0 011-1.74l.15-.09a2 2 0 00.73-2.73l-.22-.38a2 2 0 00-2.73-.73l-.15.08a2 2 0 01-2 0l-.43-.25a2 2 0 01-1-1.73V4a2 2 0 00-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+            Admin panel
+          </button>
+          <div class="ud-sep"></div>
+          <button class="ud-item danger" onclick="gsLoginUI.logout()">
+            <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            Uitloggen
+          </button>
+        </div>
       </div>
     </div>
   </header>
@@ -654,7 +823,7 @@ window.addEventListener('load', ()=>{
         <tr><td style="padding:3px 8px 3px 0;color:var(--muted)">0</td><td style="padding:3px 0" data-i18n="zoomFit">Passend</td></tr>
       </table>
     </div>
-    <p class="version-tag">v2.0.0 · 23-06-2026</p>
+    <p class="version-tag">v2.2.0 · 23-06-2026</p>
   </div>
 </div>
 
@@ -672,6 +841,75 @@ window.addEventListener('load', ()=>{
   </div>
 </div>
 
+<!-- ═══ Projects modal ═══ -->
+<div class="gsb-modal-backdrop" id="projectsModal">
+  <div class="gsb-modal">
+    <div class="gsb-modal-head">
+      <h3>Mijn projecten</h3>
+      <button class="gsb-modal-close" onclick="gsLoginUI.closeModal('projectsModal')"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="gsb-modal-body">
+      <div class="projects-grid" id="projectsGrid"></div>
+      <p id="projectsEmpty" style="text-align:center;color:var(--muted);padding:40px 0;display:none">Nog geen opgeslagen projecten.</p>
+    </div>
+    <div class="gsb-modal-foot">
+      <button class="btn btn-primary" onclick="gsLoginUI.saveCurrentProject()">Huidig project opslaan</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Profile modal ═══ -->
+<div class="gsb-modal-backdrop" id="profileModal">
+  <div class="gsb-modal" style="max-width:440px">
+    <div class="gsb-modal-head">
+      <h3>Profiel bewerken</h3>
+      <button class="gsb-modal-close" onclick="gsLoginUI.closeModal('profileModal')"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="gsb-modal-body">
+      <form class="profile-form" id="profileForm" onsubmit="gsLoginUI.handleProfileSave(event)">
+        <div class="pf-field"><label>Naam</label><input type="text" id="profName"></div>
+        <div class="pf-field"><label>Bedrijfsnaam</label><input type="text" id="profCompany"></div>
+        <div class="pf-field"><label>Voorkeur formaat</label>
+          <select id="profFormat"><option value="dtf55">DTF 55cm</option><option value="dtf60">DTF 60cm</option><option value="a3">A3</option><option value="a4">A4</option><option value="a5">A5</option></select>
+        </div>
+        <div class="pf-field"><label>Eenheid</label>
+          <select id="profUnit"><option value="cm">Centimeter</option><option value="mm">Millimeter</option></select>
+        </div>
+        <div class="pf-field"><label>Taal</label>
+          <select id="profLang"><option value="nl">Nederlands</option><option value="en">English</option></select>
+        </div>
+        <button type="submit" class="login-submit" style="margin-top:12px">Opslaan</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Admin panel modal ═══ -->
+<div class="gsb-modal-backdrop" id="adminModal">
+  <div class="gsb-modal wide">
+    <div class="gsb-modal-head">
+      <h3>Admin panel</h3>
+      <button class="gsb-modal-close" onclick="gsLoginUI.closeModal('adminModal')"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="gsb-modal-body">
+      <div class="admin-tabs">
+        <button class="active" onclick="gsLoginUI.adminTab('users')">Gebruikers</button>
+        <button onclick="gsLoginUI.adminTab('projects')">Projecten</button>
+        <button onclick="gsLoginUI.adminTab('settings')">Instellingen</button>
+        <button onclick="gsLoginUI.adminTab('stats')">Statistieken</button>
+      </div>
+      <div class="admin-tab-content active" id="adminTabUsers"><div id="adminUsersTable"></div></div>
+      <div class="admin-tab-content" id="adminTabProjects"><div id="adminProjectsTable"></div></div>
+      <div class="admin-tab-content" id="adminTabSettings"><div class="settings-form" id="adminSettingsForm"></div></div>
+      <div class="admin-tab-content" id="adminTabStats"><div id="adminStatsContent"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Supabase JS SDK -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="./auth.js"></script>
+<script src="./login-ui.js"></script>
 <script src="./app.js"></script>
 </body>
 </html>
