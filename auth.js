@@ -78,12 +78,12 @@ async function signIn(email, password){
 }
 
 /* ── Auth: sign up ── */
-async function signUp(email, password, displayName){
+async function signUp(email, password, displayName, companyName){
   const client = getClient();
   if(!client) return { error: { message: 'Supabase niet geladen' } };
   const { data, error } = await client.auth.signUp({
     email, password,
-    options: { data: { display_name: displayName || '' } }
+    options: { data: { display_name: displayName || '', company_name: companyName || '' } }
   });
   if(error) return { error };
   // Supabase may auto-confirm or require email confirmation
@@ -92,10 +92,11 @@ async function signUp(email, password, displayName){
   }
   _user = data.user;
   await _loadProfile();
-  // Update display_name if trigger didn't catch it
-  if(displayName && _profile && !_profile.display_name){
-    await updateProfile({ display_name: displayName });
-  }
+  // Update profile fields if trigger didn't catch them
+  const profileUpdates = {};
+  if(displayName && _profile && !_profile.display_name) profileUpdates.display_name = displayName;
+  if(companyName && _profile && !_profile.company_name) profileUpdates.company_name = companyName;
+  if(Object.keys(profileUpdates).length > 0) await updateProfile(profileUpdates);
   await _logUsage('signup');
   showApp();
   _fireReady();

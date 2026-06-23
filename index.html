@@ -543,6 +543,7 @@ window.addEventListener('load', ()=>{
     <!-- Register form -->
     <form id="registerForm" style="display:none" onsubmit="gsLoginUI.handleRegister(event)">
       <div class="login-field"><label>Naam</label><input type="text" id="regName" required autocomplete="name"></div>
+      <div class="login-field"><label>Bedrijfsnaam</label><input type="text" id="regCompany" required autocomplete="organization"></div>
       <div class="login-field"><label>E-mailadres</label><input type="email" id="regEmail" required autocomplete="email"></div>
       <div class="login-field"><label>Wachtwoord (min. 6 tekens)</label><input type="password" id="regPassword" required autocomplete="new-password" minlength="6"></div>
       <button type="submit" class="login-submit" id="regBtn">Account aanmaken</button>

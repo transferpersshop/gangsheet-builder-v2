@@ -60,11 +60,12 @@ async function handleRegister(e){
   hideMsg();
   const btn = document.getElementById('regBtn');
   const name = document.getElementById('regName').value.trim();
+  const company = document.getElementById('regCompany').value.trim();
   const email = document.getElementById('regEmail').value.trim();
   const pw = document.getElementById('regPassword').value;
-  if(!name || !email || !pw) return;
+  if(!name || !company || !email || !pw) return;
   btn.disabled = true; btn.textContent = 'Bezig...';
-  const result = await gsAuth.signUp(email, pw, name);
+  const result = await gsAuth.signUp(email, pw, name, company);
   btn.disabled = false; btn.textContent = 'Account aanmaken';
   if(result.error) return showError(_translateError(result.error.message));
   if(result.needsConfirmation){
