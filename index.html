@@ -213,6 +213,23 @@ window.addEventListener('load', ()=>{
   .item-row .row-del svg{width:14px;height:14px;stroke:currentColor;stroke-width:2.4;fill:none;stroke-linecap:round;stroke-linejoin:round}
 
   .canvas-wrap{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;padding:16px 24px 24px;overflow:auto;background:radial-gradient(circle at 1px 1px,rgba(0,0,0,.06) 1px,transparent 0);background-size:18px 18px}
+  /* Logo loading overlay — centered on canvas with gradient progress bar */
+  /* ── Text Editor modal rows ── */
+  .te-row{display:flex;gap:12px;align-items:flex-end;margin-bottom:6px}
+  .te-field{display:flex;flex-direction:column;gap:3px}
+  .te-field label{font-size:.75rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+  .te-csv-btn{background:none;border:1px dashed var(--border);color:var(--fg);border-radius:6px;padding:6px 12px;font-size:.78rem;cursor:pointer;transition:border-color .2s}
+  .te-csv-btn:hover{border-color:var(--primary);color:var(--primary)}
+  #tePreview svg path,#tePreview svg{fill:var(--fg)}
+
+  .logo-load-overlay{display:none;position:absolute;inset:0;z-index:150;background:rgba(0,0,0,.25);align-items:center;justify-content:center;pointer-events:none}
+  .logo-load-overlay.active{display:flex}
+  .logo-load-card{background:rgba(255,255,255,.96);border-radius:16px;padding:28px 40px;box-shadow:0 8px 32px rgba(0,0,0,.18);display:flex;flex-direction:column;align-items:center;gap:14px;min-width:220px}
+  .logo-load-spinner{width:32px;height:32px;border:3px solid #e5e7eb;border-top-color:#6946c8;border-radius:50%;animation:logoSpin .7s linear infinite}
+  @keyframes logoSpin{to{transform:rotate(360deg)}}
+  .logo-load-text{font-size:.85rem;font-weight:500;color:#374151;margin:0}
+  .logo-load-bar{width:180px;height:6px;border-radius:3px;background:#e5e7eb;overflow:hidden;position:relative}
+  .logo-load-bar-fill{height:100%;border-radius:3px;width:0%;background:linear-gradient(90deg,#6946c8,#1d9aaf);transition:width .3s ease}
   .canvas-pct{display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:100;flex-direction:column;align-items:center;gap:4px;background:rgba(255,255,255,.94);padding:20px 40px;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,.15);pointer-events:none;text-align:center}
   .canvas-pct.active{display:flex}
   .canvas-pct-label{font-size:.8rem;font-weight:500;color:#6b7280;text-transform:uppercase;letter-spacing:1.5px}
@@ -308,7 +325,7 @@ window.addEventListener('load', ()=>{
   .export-btn-big{width:100%;justify-content:center;padding:14px 16px;font-size:.95rem}
   .footer-btn-row{display:flex;gap:6px;margin-bottom:6px}
   .footer-btn-row .btn{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:4px}
-  .footer-btn-row .btn svg{width:15px;height:15px;flex-shrink:0}
+  .footer-btn-row .btn svg{width:15px;height:15px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 
   /* Save‐pulse animation on user avatar */
   @keyframes avatarPulse{
@@ -638,13 +655,17 @@ window.addEventListener('load', ()=>{
       </div>
 
       <div class="section">
-        <div class="section-head"><span class="num">3</span><h3 data-i18n="step2">Logo's</h3></div>
+        <div class="section-head"><span class="num">3</span><h3 data-i18n="step2">Upload logo's / Creëer tekst</h3></div>
         <div class="upload-area" id="uploadArea">
           <strong data-i18n="dropTitle">Klik of sleep hier</strong>
-          <p data-i18n="dropHint">SVG, AI, PDF, PNG, JPG</p>
+          <p data-i18n="dropHint">SVG, AI, EPS, PDF, PNG, JPG</p>
           <p class="drop-max" data-i18n="dropMax">Max. 50 MB</p>
-          <input type="file" id="fileInput" accept="image/svg+xml,.ai,.pdf,image/png,image/jpeg" multiple hidden>
+          <input type="file" id="fileInput" accept="image/svg+xml,.ai,.eps,.pdf,image/png,image/jpeg" multiple hidden>
         </div>
+        <button class="btn export-btn-bg" style="width:100%;margin-top:8px;padding:10px 16px;font-size:.85rem;border-radius:8px;gap:6px;display:flex;align-items:center;justify-content:center" onclick="gsbTextEditor.open()">
+          <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M17 10H3"/><path d="M21 6H3"/><path d="M21 14H3"/><path d="M17 18H3"/></svg>
+          Tekst maken
+        </button>
         <p class="help" id="uploadTipP"></p>
       </div>
 
@@ -704,6 +725,14 @@ window.addEventListener('load', ()=>{
         </div>
       </div>
       <div class="canvas-wrap" id="canvasWrap">
+        <!-- Logo loading overlay -->
+        <div class="logo-load-overlay" id="logoLoadOverlay">
+          <div class="logo-load-card">
+            <div class="logo-load-spinner"></div>
+            <p class="logo-load-text" id="logoLoadText">Logo laden…</p>
+            <div class="logo-load-bar"><div class="logo-load-bar-fill" id="logoLoadBarFill"></div></div>
+          </div>
+        </div>
         <div class="canvas-pct" id="canvasPct"><span class="canvas-pct-label" id="canvasPctLabel">Logo's plaatsen</span><span class="canvas-pct-num" id="canvasPctNum">0%</span></div>
         <div class="canvas-manual-badge" id="manualBadge">Handmatige modus</div>
         <div class="canvas-ruler-col">
@@ -767,10 +796,15 @@ window.addEventListener('load', ()=>{
         <div class="pdf-progress" id="pdfProgressWrap"></div>
         <div class="footer-btn-row">
           <button class="btn export-btn-bg" id="exportBgBtn" data-i18n="exportBgBtn">Download drukproef</button>
-          <button class="btn export-btn-bg" id="saveProjectBtn" onclick="gsLoginUI.openSaveDialog()">
+          <button class="btn export-btn-bg" id="saveProjectBtn" onclick="window.gsbExportProject()">
             <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
             Opslaan
           </button>
+          <button class="btn export-btn-bg" id="openProjectBtn" onclick="document.getElementById('gsbFileInput').click()">
+            <svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            Openen
+          </button>
+          <input type="file" id="gsbFileInput" accept=".gsb,.json" style="display:none" onchange="if(this.files[0])window.gsbImportProject(this.files[0]);this.value=''">
         </div>
         <button class="btn btn-grad-fill export-btn-big" id="exportBtn" data-i18n="exportBtn">Download print-ready PDF</button>
       </div>
@@ -841,7 +875,7 @@ window.addEventListener('load', ()=>{
         <tr><td style="padding:3px 8px 3px 0;color:var(--muted)">0</td><td style="padding:3px 0" data-i18n="zoomFit">Passend</td></tr>
       </table>
     </div>
-    <p class="version-tag">v2.4.0 · 23-06-2026</p>
+    <p class="version-tag">v2.5.0 · 23-06-2026</p>
   </div>
 </div>
 
@@ -860,7 +894,7 @@ window.addEventListener('load', ()=>{
 </div>
 
 <!-- ═══ Save-name dialog ═══ -->
-<div class="gsb-modal-backdrop" id="saveNameModal" style="display:none" onclick="if(event.target===this)gsLoginUI.closeSaveDialog()">
+<div class="gsb-modal-backdrop" id="saveNameModal" onclick="if(event.target===this)gsLoginUI.closeSaveDialog()">
   <div class="gsb-modal" style="max-width:400px">
     <div class="gsb-modal-head">
       <h3>Project opslaan</h3>
@@ -941,10 +975,85 @@ window.addEventListener('load', ()=>{
   </div>
 </div>
 
+<!-- ═══ Text Editor modal ═══ -->
+<div class="gsb-modal-backdrop" id="textEditorModal" onclick="if(event.target===this)gsbTextEditor.close()">
+  <div class="gsb-modal" style="max-width:560px">
+    <div class="gsb-modal-head">
+      <h3>Tekst maken</h3>
+      <button class="gsb-modal-close" onclick="gsbTextEditor.close()"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="gsb-modal-body" style="padding:18px 22px">
+      <!-- Font selection -->
+      <div class="te-row">
+        <div class="te-field" style="flex:1">
+          <label for="teFontSelect">Lettertype</label>
+          <select id="teFontSelect" class="login-field" onchange="gsbTextEditor.onFontChange()">
+            <option value="">— Kies lettertype —</option>
+          </select>
+        </div>
+        <div class="te-field" style="flex:0 0 auto">
+          <label>Eigen font</label>
+          <button class="btn export-btn-bg" style="padding:7px 12px;font-size:.8rem" onclick="document.getElementById('teCustomFontInput').click()">
+            <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;vertical-align:-2px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Upload .ttf/.otf
+          </button>
+          <input type="file" id="teCustomFontInput" accept=".ttf,.otf,.woff,.woff2" style="display:none" onchange="gsbTextEditor.onCustomFontUpload()">
+        </div>
+      </div>
+      <div id="teFontStatus" style="font-size:.75rem;color:#ef4444;min-height:16px;margin-bottom:4px"></div>
+
+      <!-- Size controls -->
+      <div class="te-row">
+        <div class="te-field" style="flex:1">
+          <label for="teSizeMm">Hoogte tekst</label>
+          <div style="display:flex;gap:6px">
+            <input type="number" id="teSizeMm" class="login-field" value="30" min="1" max="999" step="1" style="flex:1" oninput="gsbTextEditor.updatePreview()">
+            <select id="teSizeUnit" class="login-field" style="width:70px">
+              <option value="mm">mm</option>
+              <option value="cm">cm</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Text input -->
+      <div class="te-field" style="margin-top:10px">
+        <label for="teTextInput">Tekst (één naam per regel voor batch)</label>
+        <textarea id="teTextInput" class="login-field" rows="5" placeholder="Jan&#10;Piet&#10;Klaas&#10;&#10;Elke regel = apart logo op het vel" oninput="gsbTextEditor.updatePreview()"></textarea>
+      </div>
+
+      <!-- CSV import -->
+      <div style="margin-top:6px">
+        <button class="te-csv-btn" onclick="document.getElementById('teCsvInput').click()">
+          <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;vertical-align:-2px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          Importeer namen uit CSV
+        </button>
+        <input type="file" id="teCsvInput" accept=".csv,.txt" style="display:none" onchange="gsbTextEditor.onCsvImport()">
+      </div>
+
+      <!-- Preview -->
+      <div class="te-field" style="margin-top:14px">
+        <label>Preview</label>
+        <div id="tePreview" style="min-height:50px;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;text-align:center">
+          <span style="color:#9ca3af;font-size:.8rem">Kies een lettertype om preview te zien</span>
+        </div>
+      </div>
+
+      <!-- Submit -->
+      <button class="btn btn-grad-fill" style="width:100%;margin-top:16px;padding:12px 16px;font-size:.95rem" onclick="gsbTextEditor.addTexts()">
+        Tekst toevoegen aan vel
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- Supabase JS SDK -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<!-- opentype.js for text-to-SVG -->
+<script src="https://cdn.jsdelivr.net/npm/opentype.js@2.0.0/dist/opentype.min.js"></script>
 <script src="./auth.js"></script>
 <script src="./login-ui.js"></script>
 <script src="./app.js"></script>
+<script src="./text-editor.js"></script>
 </body>
 </html>
