@@ -435,16 +435,23 @@ function _textToSvg(text, font, heightMm, color, opts){
   var strokeOffset = opts.strokeOffset || 0;
 
   if(hasStroke){
-    // Expand viewBox to make room for outward stroke on all sides
+    // Expand viewBox to make room for outward stroke + offset on all sides
     var expand = opts.strokeWidth + strokeOffset;
     tx += expand; ty += expand;
     w += expand * 2; h += expand * 2;
     transforms = 'translate('+_r(tx)+','+_r(ty)+')';
     if(opts.simulateItalic) transforms += ' skewX(-12)';
-    // paint-order:stroke fill → stroke drawn first (behind), then fill covers inner half
-    // SVG stroke-width doubled because only outer half is visible
-    var outerSW = (opts.strokeWidth + strokeOffset) * 2;
-    svgInner += '<path d="'+dAttr+'" fill="'+color+'" stroke="'+opts.strokeColor+'" stroke-width="'+_r(outerSW)+'" stroke-linejoin="round" paint-order="stroke fill" transform="'+transforms+'"/>';
+    // Two-path technique for outside stroke with gap:
+    // Path 1 (bottom): full outer stroke ring — visible width = strokeWidth + offset
+    // Path 2 (top): gap mask in fill color — covers inner 'offset' portion
+    // Result: fill → gap(offset) in fillColor → outline(strokeWidth) in strokeColor
+    var totalSW = (opts.strokeWidth + strokeOffset) * 2;
+    svgInner += '<path d="'+dAttr+'" fill="'+color+'" stroke="'+opts.strokeColor+'" stroke-width="'+_r(totalSW)+'" stroke-linejoin="round" paint-order="stroke fill" transform="'+transforms+'"/>';
+    if(strokeOffset > 0){
+      // Gap mask: covers the inner 'offset' area with fill color
+      var gapSW = strokeOffset * 2;
+      svgInner += '<path d="'+dAttr+'" fill="'+color+'" stroke="'+color+'" stroke-width="'+_r(gapSW)+'" stroke-linejoin="round" paint-order="stroke fill" transform="'+transforms+'"/>';
+    }
   } else {
     // No stroke — simple fill path
     var fillStrokeAttr = '';
@@ -559,9 +566,13 @@ function _refreshPreview(){
 
     var svgH = '<svg viewBox="0 0 '+_r(vw)+' '+_r(vh)+'" style="max-width:100%;max-height:90px;display:block;margin:0 auto" xmlns="http://www.w3.org/2000/svg">';
     if(hasStroke){
-      // Single path with paint-order: stroke painted first (behind), fill covers inner half
-      var outerSW = (_strokeWidth + _strokeOffset) * 2;
-      svgH += '<path d="'+dAttr+'" fill="'+color+'" stroke="'+_strokeColor+'" stroke-width="'+_r(outerSW)+'" stroke-linejoin="round" paint-order="stroke fill" transform="'+transforms+'"/>';
+      // Two-path: outer stroke ring + gap mask for offset
+      var totalSW = (_strokeWidth + _strokeOffset) * 2;
+      svgH += '<path d="'+dAttr+'" fill="'+color+'" stroke="'+_strokeColor+'" stroke-width="'+_r(totalSW)+'" stroke-linejoin="round" paint-order="stroke fill" transform="'+transforms+'"/>';
+      if(_strokeOffset > 0){
+        var gapSW = _strokeOffset * 2;
+        svgH += '<path d="'+dAttr+'" fill="'+color+'" stroke="'+color+'" stroke-width="'+_r(gapSW)+'" stroke-linejoin="round" paint-order="stroke fill" transform="'+transforms+'"/>';
+      }
     } else {
       var simBoldA = simBold ? ' stroke="'+color+'" stroke-width="'+(fontSize*0.022).toFixed(1)+'" stroke-linejoin="round"' : '';
       svgH += '<path d="'+dAttr+'" fill="'+color+'"'+simBoldA+' transform="'+transforms+'"/>';
@@ -658,7 +669,7 @@ function switchTab(tab){
 
 /* ── Jersey defaults ── */
 var JD = {
-  nameH: 30, numH: 80, gap: 5, // mm
+  nameH: 50, numH: 230, gap: 50, // mm — KNVB industry standard
   curved: false,
   strokeName: true, strokeNum: true,
 };
@@ -668,7 +679,7 @@ function jToggleDefault(field){
   var inp = document.getElementById('jVal_'+field);
   if(!cb || !inp) return;
   if(cb.checked){
-    inp.value = field==='nameH'?30:field==='numH'?80:5;
+    inp.value = field==='nameH'?50:field==='numH'?230:50;
     inp.disabled = true;
   } else {
     inp.disabled = false;
@@ -816,12 +827,17 @@ function _curvedTextSvg(text, font, heightMm, color, arcWidthMm, opts){
         var gb = p.getBoundingBox();
         var gtx = -(gb.x1+gb.x2)/2;
         var gty = -gb.y1;
-        svgParts += '<path d="'+d+'" fill="'+color+'"';
+        var gTransform = 'translate('+_r(gx)+','+_r(gy)+') rotate('+_r(rotDeg)+') translate('+_r(gtx)+','+_r(gty)+')';
         if(opts.hasStroke && opts.strokeColor && opts.strokeColor!=='none' && opts.strokeWidth>0){
-          var sw = (opts.strokeWidth + (opts.strokeOffset||0)) * 2;
-          svgParts += ' stroke="'+opts.strokeColor+'" stroke-width="'+_r(sw)+'" stroke-linejoin="round" paint-order="stroke fill"';
+          var cOffset = opts.strokeOffset||0;
+          var sw = (opts.strokeWidth + cOffset) * 2;
+          svgParts += '<path d="'+d+'" fill="'+color+'" stroke="'+opts.strokeColor+'" stroke-width="'+_r(sw)+'" stroke-linejoin="round" paint-order="stroke fill" transform="'+gTransform+'"/>';
+          if(cOffset > 0){
+            svgParts += '<path d="'+d+'" fill="'+color+'" stroke="'+color+'" stroke-width="'+_r(cOffset*2)+'" stroke-linejoin="round" paint-order="stroke fill" transform="'+gTransform+'"/>';
+          }
+        } else {
+          svgParts += '<path d="'+d+'" fill="'+color+'" transform="'+gTransform+'"/>';
         }
-        svgParts += ' transform="translate('+_r(gx)+','+_r(gy)+') rotate('+_r(rotDeg)+') translate('+_r(gtx)+','+_r(gty)+')"/>';
       }
     }catch(_){}
 
@@ -862,19 +878,24 @@ function _jRefreshPreview(){
     var k = _currentName+'__'+wt+'_'+st;
     if(_loadedFonts[k]) font = _loadedFonts[k];
 
-    // Scale for preview (fit in ~100px height)
+    // Scale for preview (fit in ~140px rendered height)
     var totalH = nameH + gap + numH;
-    var previewScale = 80 / totalH;
+    var previewScale = 120 / totalH;
     var pNameH = nameH * previewScale;
     var pNumH = numH * previewScale;
     var pGap = gap * previewScale;
 
-    // Render number
+    // Render both name and number first to calculate total width
     var numResult = _previewPath(font, num, pNumH);
     if(!numResult){ el.innerHTML='<span style="color:#9ca3af">Geen preview</span>'; return; }
+    var nameResult = !JD.curved ? _previewPath(font, name, pNameH) : null;
+
+    // Calculate svgW from both widths up front
+    var strokeExpand = (_strokeColor && _strokeColor!=='none' && _strokeWidth>0) ? (_strokeWidth + _strokeOffset)*previewScale : 0;
+    var svgW = numResult.w + (JD.strokeNum?strokeExpand*2:0) + 10;
+    if(nameResult) svgW = Math.max(svgW, nameResult.w + (JD.strokeName?strokeExpand*2:0) + 10);
 
     var svgContent = '';
-    var svgW = numResult.w + 10;
     var yOffset = 4;
 
     // Render name (curved or straight)
@@ -889,35 +910,50 @@ function _jRefreshPreview(){
         svgW = Math.max(svgW, curved.w + 10);
       }
     } else {
-      var nameResult = _previewPath(font, name, pNameH);
       if(nameResult){
-        var nameStroke = '';
-        if(JD.strokeName && _strokeColor && _strokeColor!=='none' && _strokeWidth>0){
-          var nsw = (_strokeWidth + _strokeOffset) * previewScale * 2;
-          nameStroke = ' stroke="'+_strokeColor+'" stroke-width="'+_r(nsw)+'" stroke-linejoin="round" paint-order="stroke fill"';
-        }
+        var nameHasStroke = JD.strokeName && _strokeColor && _strokeColor!=='none' && _strokeWidth>0;
+        var nameExpand = nameHasStroke ? (_strokeWidth + _strokeOffset) * previewScale : 0;
         var nameX2 = (svgW - nameResult.w)/2;
-        svgContent += '<path d="'+nameResult.d+'" fill="'+color+'"'+nameStroke+' transform="translate('+_r(nameX2+(-nameResult.bb.x1))+','+_r(yOffset+(-nameResult.bb.y1))+')"/>';
-        yOffset += nameResult.h + pGap;
-        svgW = Math.max(svgW, nameResult.w + 10);
+        var nTx = nameX2+(-nameResult.bb.x1) + nameExpand;
+        var nTy = yOffset+(-nameResult.bb.y1) + nameExpand;
+        var nTransform = 'translate('+_r(nTx)+','+_r(nTy)+')';
+        if(nameHasStroke){
+          var nsw = (_strokeWidth + _strokeOffset) * previewScale * 2;
+          svgContent += '<path d="'+nameResult.d+'" fill="'+color+'" stroke="'+_strokeColor+'" stroke-width="'+_r(nsw)+'" stroke-linejoin="round" paint-order="stroke fill" transform="'+nTransform+'"/>';
+          if(_strokeOffset > 0){
+            svgContent += '<path d="'+nameResult.d+'" fill="'+color+'" stroke="'+color+'" stroke-width="'+_r(_strokeOffset*previewScale*2)+'" stroke-linejoin="round" paint-order="stroke fill" transform="'+nTransform+'"/>';
+          }
+        } else {
+          svgContent += '<path d="'+nameResult.d+'" fill="'+color+'" transform="'+nTransform+'"/>';
+        }
+        yOffset += nameResult.h + nameExpand*2 + pGap;
+        svgW = Math.max(svgW, nameResult.w + nameExpand*2 + 10);
       }
     }
 
     // Number
-    var numStroke = '';
-    if(JD.strokeNum && _strokeColor && _strokeColor!=='none' && _strokeWidth>0){
-      var nsw2 = (_strokeWidth + _strokeOffset) * previewScale * 2;
-      numStroke = ' stroke="'+_strokeColor+'" stroke-width="'+_r(nsw2)+'" stroke-linejoin="round" paint-order="stroke fill"';
-    }
+    var numHasStroke = JD.strokeNum && _strokeColor && _strokeColor!=='none' && _strokeWidth>0;
+    var numExpand = numHasStroke ? (_strokeWidth + _strokeOffset) * previewScale : 0;
     var numX = (svgW - numResult.w)/2;
-    svgContent += '<path d="'+numResult.d+'" fill="'+color+'"'+numStroke+' transform="translate('+_r(numX+(-numResult.bb.x1))+','+_r(yOffset+(-numResult.bb.y1))+')"/>';
-    yOffset += numResult.h + 4;
+    var nuTx = numX+(-numResult.bb.x1) + numExpand;
+    var nuTy = yOffset+(-numResult.bb.y1) + numExpand;
+    var nuTransform = 'translate('+_r(nuTx)+','+_r(nuTy)+')';
+    if(numHasStroke){
+      var nsw2 = (_strokeWidth + _strokeOffset) * previewScale * 2;
+      svgContent += '<path d="'+numResult.d+'" fill="'+color+'" stroke="'+_strokeColor+'" stroke-width="'+_r(nsw2)+'" stroke-linejoin="round" paint-order="stroke fill" transform="'+nuTransform+'"/>';
+      if(_strokeOffset > 0){
+        svgContent += '<path d="'+numResult.d+'" fill="'+color+'" stroke="'+color+'" stroke-width="'+_r(_strokeOffset*previewScale*2)+'" stroke-linejoin="round" paint-order="stroke fill" transform="'+nuTransform+'"/>';
+      }
+    } else {
+      svgContent += '<path d="'+numResult.d+'" fill="'+color+'" transform="'+nuTransform+'"/>';
+    }
+    yOffset += numResult.h + numExpand*2 + 4;
 
     // Auto dark background
     if(_isLightColor(color)) el.style.cssText = 'background:#1a1a1a;border-radius:6px;padding:4px';
     else el.style.cssText = '';
 
-    el.innerHTML = '<svg viewBox="0 0 '+_r(svgW)+' '+_r(yOffset)+'" style="max-width:100%;max-height:120px;display:block;margin:0 auto" xmlns="http://www.w3.org/2000/svg">'+svgContent+'</svg>';
+    el.innerHTML = '<svg viewBox="0 0 '+_r(svgW)+' '+_r(yOffset)+'" style="max-width:100%;max-height:160px;display:block;margin:0 auto" xmlns="http://www.w3.org/2000/svg">'+svgContent+'</svg>';
   }catch(e){
     el.innerHTML = '<span style="color:#ef4444;font-size:.82rem">Preview fout: '+_esc(e.message||'')+'</span>';
   }

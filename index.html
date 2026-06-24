@@ -260,19 +260,23 @@ window.addEventListener('load', ()=>{
   /* Used fonts tags */
   .te-used-tag{display:inline-block;background:var(--bg-light);border:1px solid var(--border);border-radius:6px;padding:2px 10px;font-size:.74rem;color:var(--fg);margin:2px 4px 2px 0}
   /* Tab bar */
-  .te-tab-bar{display:flex;gap:0;margin:0 0 14px;border-bottom:2px solid var(--border);padding:0}
-  .te-tab{flex:1;padding:9px 0;text-align:center;font-size:.82rem;font-weight:600;color:var(--muted);background:none;border:none;cursor:pointer;transition:all .15s;border-bottom:2px solid transparent;margin-bottom:-2px}
+  .te-tab-bar{display:flex;gap:0;margin:0 0 16px;background:var(--bg-light);border-radius:10px;padding:3px;border:1px solid var(--border)}
+  .te-tab{flex:1;padding:9px 0;text-align:center;font-size:.82rem;font-weight:600;color:var(--muted);background:none;border:none;cursor:pointer;transition:all .18s;border-radius:8px;display:flex;align-items:center;justify-content:center;gap:6px}
   .te-tab:hover{color:var(--fg)}
-  .te-tab.te-tab-on{color:var(--primary);border-bottom-color:var(--primary)}
+  .te-tab.te-tab-on{color:#fff;background:var(--primary);box-shadow:0 1px 4px rgba(0,0,0,.12)}
+  .te-tab svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
   .te-pane{display:none}
   .te-pane.te-pane-on{display:block}
   /* Jersey specific */
-  .j-defaults{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px}
-  .j-def-item{display:flex;flex-direction:column;gap:3px}
-  .j-def-item label{font-size:.68rem;color:var(--muted);margin:0;display:flex;align-items:center;gap:4px}
-  .j-def-item input[type=number]{width:100%;padding:5px 7px;font-size:.78rem;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--fg);text-align:center}
-  .j-def-item input[type=number]:disabled{opacity:.5;background:var(--bg-light)}
-  .j-toggle-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+  .j-section{background:var(--bg-light);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:12px}
+  .j-section-label{font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin:0 0 8px}
+  .j-defaults{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+  .j-def-item{display:flex;flex-direction:column;gap:4px}
+  .j-def-item label{font-size:.7rem;color:var(--fg);margin:0;display:flex;align-items:center;gap:5px;font-weight:500;cursor:pointer}
+  .j-def-item label input[type=checkbox]{accent-color:var(--primary);width:14px;height:14px;cursor:pointer}
+  .j-def-item input[type=number]{width:100%;padding:6px 8px;font-size:.8rem;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--fg);text-align:center}
+  .j-def-item input[type=number]:disabled{opacity:.45;background:var(--bg-light)}
+  .j-toggle-row{display:flex;gap:6px;flex-wrap:wrap}
   .j-fields{display:flex;gap:8px;margin-bottom:6px}
   .j-fields .te-field{flex:2}
   .j-fields .te-field:last-child{flex:1}
@@ -1102,17 +1106,23 @@ window.addEventListener('load', ()=>{
           </div>
         </div>
         <div class="te-field" style="flex:0 0 auto">
-          <label>Afstand</label>
+          <label>Gap</label>
           <div class="te-color-wrap" style="padding:4px 6px">
-            <input type="number" id="teStrokeOffset" class="te-input" value="0" min="0" max="20" step="0.5" style="width:48px;padding:4px 6px;font-size:.78rem;border:none;text-align:center;background:transparent" oninput="gsbTextEditor.syncStroke()" title="Afstand stroke vanaf tekst">
+            <input type="number" id="teStrokeOffset" class="te-input" value="0" min="0" max="20" step="0.5" style="width:48px;padding:4px 6px;font-size:.78rem;border:none;text-align:center;background:transparent" oninput="gsbTextEditor.syncStroke()" title="Ruimte tussen tekst en stroke">
           </div>
         </div>
       </div>
 
       <!-- ── Tab bar ── -->
       <div class="te-tab-bar">
-        <button class="te-tab te-tab-on" data-tab="tekst" onclick="gsbTextEditor.switchTab('tekst')">Tekst</button>
-        <button class="te-tab" data-tab="rugnummers" onclick="gsbTextEditor.switchTab('rugnummers')">Rugnummers</button>
+        <button class="te-tab te-tab-on" data-tab="tekst" onclick="gsbTextEditor.switchTab('tekst')">
+          <svg viewBox="0 0 24 24"><path d="M4 7V4h16v3"/><line x1="12" y1="4" x2="12" y2="20"/><line x1="8" y1="20" x2="16" y2="20"/></svg>
+          Tekst
+        </button>
+        <button class="te-tab" data-tab="rugnummers" onclick="gsbTextEditor.switchTab('rugnummers')">
+          <svg viewBox="0 0 24 24"><path d="M20.38 3.46L16 2 12 3.46 8 2 3.62 3.46a.59.59 0 0 0-.38.56v16a.59.59 0 0 0 .74.56L8 19.06l4 1.48 4-1.48 4.38 1.48a.59.59 0 0 0 .62-.56V4.02a.59.59 0 0 0-.62-.56z"/><text x="9" y="15" style="font-size:9px;fill:currentColor;font-weight:800;font-family:sans-serif">10</text></svg>
+          Rugnummers
+        </button>
       </div>
 
       <!-- ══════ PANE: Tekst ══════ -->
@@ -1162,37 +1172,40 @@ window.addEventListener('load', ()=>{
 
       <!-- ══════ PANE: Rugnummers ══════ -->
       <div id="tePane_rugnummers" class="te-pane">
-        <!-- Default heights -->
-        <div class="te-field" style="margin-bottom:4px">
-          <label>Standaard afmetingen <span style="font-weight:400;opacity:.65">(mm)</span></label>
-        </div>
-        <div class="j-defaults">
-          <div class="j-def-item">
-            <label><input type="checkbox" id="jDef_nameH" checked onchange="gsbTextEditor.jToggleDefault('nameH')"> Naam hoogte</label>
-            <input type="number" id="jVal_nameH" value="30" min="1" max="200" step="1" disabled oninput="gsbTextEditor.jPreview()">
-          </div>
-          <div class="j-def-item">
-            <label><input type="checkbox" id="jDef_numH" checked onchange="gsbTextEditor.jToggleDefault('numH')"> Nummer hoogte</label>
-            <input type="number" id="jVal_numH" value="80" min="1" max="300" step="1" disabled oninput="gsbTextEditor.jPreview()">
-          </div>
-          <div class="j-def-item">
-            <label><input type="checkbox" id="jDef_gap" checked onchange="gsbTextEditor.jToggleDefault('gap')"> Tussenafstand</label>
-            <input type="number" id="jVal_gap" value="5" min="0" max="50" step="1" disabled oninput="gsbTextEditor.jPreview()">
+        <!-- Section: Afmetingen -->
+        <div class="j-section">
+          <div class="j-section-label">Afmetingen (mm) — KNVB standaard</div>
+          <div class="j-defaults">
+            <div class="j-def-item">
+              <label><input type="checkbox" id="jDef_nameH" checked onchange="gsbTextEditor.jToggleDefault('nameH')"> Naam hoogte</label>
+              <input type="number" id="jVal_nameH" value="50" min="1" max="200" step="1" disabled oninput="gsbTextEditor.jPreview()">
+            </div>
+            <div class="j-def-item">
+              <label><input type="checkbox" id="jDef_numH" checked onchange="gsbTextEditor.jToggleDefault('numH')"> Nummer hoogte</label>
+              <input type="number" id="jVal_numH" value="230" min="1" max="400" step="1" disabled oninput="gsbTextEditor.jPreview()">
+            </div>
+            <div class="j-def-item">
+              <label><input type="checkbox" id="jDef_gap" checked onchange="gsbTextEditor.jToggleDefault('gap')"> Tussenafstand</label>
+              <input type="number" id="jVal_gap" value="50" min="0" max="100" step="1" disabled oninput="gsbTextEditor.jPreview()">
+            </div>
           </div>
         </div>
 
-        <!-- Extra toggles -->
-        <div class="j-toggle-row">
-          <button class="te-tog" id="jBtnCurved" onclick="gsbTextEditor.jToggleCurved()" title="Naam gebogen boven nummer" style="width:auto;padding:0 10px;font-size:.72rem;gap:4px">
-            <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;flex-shrink:0"><path d="M4 16c0-6 4-12 8-12s8 6 8 12"/></svg>
-            Gebogen
-          </button>
-          <button class="te-tog te-tog-on" id="jBtnStrokeName" onclick="gsbTextEditor.jToggleStrokeName()" title="Stroke op naam" style="width:auto;padding:0 10px;font-size:.72rem">
-            Stroke naam
-          </button>
-          <button class="te-tog te-tog-on" id="jBtnStrokeNum" onclick="gsbTextEditor.jToggleStrokeNum()" title="Stroke op nummer" style="width:auto;padding:0 10px;font-size:.72rem">
-            Stroke nummer
-          </button>
+        <!-- Section: Opties -->
+        <div class="j-section">
+          <div class="j-section-label">Opties</div>
+          <div class="j-toggle-row">
+            <button class="te-tog" id="jBtnCurved" onclick="gsbTextEditor.jToggleCurved()" title="Naam gebogen boven nummer" style="width:auto;padding:0 10px;font-size:.72rem;gap:4px">
+              <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;flex-shrink:0"><path d="M4 16c0-6 4-12 8-12s8 6 8 12"/></svg>
+              Gebogen naam
+            </button>
+            <button class="te-tog te-tog-on" id="jBtnStrokeName" onclick="gsbTextEditor.jToggleStrokeName()" title="Stroke op naam" style="width:auto;padding:0 10px;font-size:.72rem">
+              Stroke naam
+            </button>
+            <button class="te-tog te-tog-on" id="jBtnStrokeNum" onclick="gsbTextEditor.jToggleStrokeNum()" title="Stroke op nummer" style="width:auto;padding:0 10px;font-size:.72rem">
+              Stroke nummer
+            </button>
+          </div>
         </div>
 
         <!-- Name + Number fields -->
