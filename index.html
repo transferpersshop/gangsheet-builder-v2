@@ -358,11 +358,11 @@ window.addEventListener('load', ()=>{
   .summary-row .val.good{color:var(--success)}
   .summary-row .val.warn{color:var(--warn)}
   .summary-row .val.bad{color:var(--error)}
-  .export-btn-bg{width:100%;justify-content:center;padding:8px 16px;font-size:.8rem;background:var(--surface);border:1px solid var(--border);color:var(--muted);cursor:pointer;margin-bottom:6px;transition:background .15s,color .15s}
+  .export-btn-bg{width:100%;justify-content:center;padding:10px 16px;font-size:.82rem;background:var(--surface);border:1px solid var(--border);color:var(--muted);cursor:pointer;margin-bottom:6px;transition:background .15s,color .15s}
   .export-btn-bg:hover{background:var(--border);color:var(--text)}
   .export-btn-big{width:100%;justify-content:center;padding:14px 16px;font-size:.95rem}
   .footer-btn-row{display:flex;gap:6px;margin-bottom:6px}
-  .footer-btn-row .btn{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:4px}
+  .footer-btn-row .btn{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:10px 8px;font-size:.78rem}
   .footer-btn-row .btn svg{width:15px;height:15px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 
   /* Save‐pulse animation on user avatar */
@@ -698,14 +698,15 @@ window.addEventListener('load', ()=>{
       </div>
 
       <div class="section">
-        <div class="section-head"><span class="num">3</span><h3 data-i18n="step2">Upload logo's of creëer tekst</h3></div>
+        <div class="section-head"><span class="num">3</span><h3 data-i18n="step2">Logo's uploaden of tekst maken</h3></div>
         <div class="upload-area" id="uploadArea">
           <strong data-i18n="dropTitle">Klik of sleep hier</strong>
           <p data-i18n="dropHint">SVG, AI, EPS, PDF, PNG, JPG</p>
           <p class="drop-max" data-i18n="dropMax">Max. 50 MB</p>
           <input type="file" id="fileInput" accept="image/svg+xml,.ai,.eps,.pdf,image/png,image/jpeg" multiple hidden>
         </div>
-        <button class="btn export-btn-bg" style="width:100%;margin-top:8px;padding:10px 16px;font-size:.85rem;border-radius:8px;gap:6px;display:flex;align-items:center;justify-content:center" onclick="gsbTextEditor.open()">
+        <div style="display:flex;align-items:center;gap:10px;margin:12px 0 8px"><div style="flex:1;height:1px;background:var(--border)"></div><span style="font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;white-space:nowrap">of</span><div style="flex:1;height:1px;background:var(--border)"></div></div>
+        <button class="btn export-btn-bg" style="width:100%;padding:10px 16px;font-size:.85rem;border-radius:8px;gap:6px;display:flex;align-items:center;justify-content:center" onclick="gsbTextEditor.open()">
           <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M17 10H3"/><path d="M21 6H3"/><path d="M21 14H3"/><path d="M17 18H3"/></svg>
           Tekst maken
         </button>
@@ -838,10 +839,17 @@ window.addEventListener('load', ()=>{
       <div class="right-footer">
         <div class="pdf-progress" id="pdfProgressWrap"></div>
         <div class="footer-btn-row">
-          <button class="btn export-btn-bg" id="exportBgBtn" data-i18n="exportBgBtn">Download drukproef</button>
+          <button class="btn export-btn-bg" id="exportBgBtn" data-i18n="exportBgBtn">
+            <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download drukproef
+          </button>
           <button class="btn export-btn-bg" id="saveProjectBtn" onclick="window.gsbExportProject()">
             <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
             Opdracht opslaan
+          </button>
+          <button class="btn export-btn-bg" onclick="document.getElementById('gsbFileInput').click()">
+            <svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            Opdracht laden
           </button>
         </div>
         <button class="btn btn-grad-fill export-btn-big" id="exportBtn" data-i18n="exportBtn">Download print-ready PDF</button>
@@ -913,7 +921,7 @@ window.addEventListener('load', ()=>{
         <tr><td style="padding:3px 8px 3px 0;color:var(--muted)">0</td><td style="padding:3px 0" data-i18n="zoomFit">Passend</td></tr>
       </table>
     </div>
-    <p class="version-tag">v2.6.0 · 23-06-2026</p>
+    <p class="version-tag">v2.6.1 · 24-06-2026</p>
   </div>
 </div>
 
@@ -1085,6 +1093,10 @@ window.addEventListener('load', ()=>{
             <input type="color" id="teStrokeColor" value="#FFFFFF" oninput="gsbTextEditor.syncStroke()">
             <input type="number" id="teStrokeWidth" class="te-input" value="0" min="0" max="20" step="0.5" style="width:48px;padding:4px 6px;font-size:.78rem" oninput="gsbTextEditor.syncStroke()" title="Stroke dikte">
           </div>
+        </div>
+        <div class="te-field" style="flex:0 0 auto">
+          <label>Afstand</label>
+          <input type="number" id="teStrokeOffset" class="te-input" value="0" min="0" max="20" step="0.5" style="width:56px;padding:8px 6px;font-size:.78rem;text-align:center" oninput="gsbTextEditor.syncStroke()" title="Afstand stroke vanaf tekst">
         </div>
       </div>
 

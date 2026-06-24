@@ -1,6 +1,6 @@
 /* ================================================================
    text-editor.js — Tekst-naar-SVG creator voor Gang Sheet Builder
-   v2.6.0 — font picker, styling, spacing, stroke, x-height sizing
+   v2.6.1 — font picker, styling, spacing, outside stroke + offset, x-height sizing
    ================================================================ */
 (function(){
 'use strict';
@@ -44,6 +44,7 @@ var _bold = false, _italic = false, _underline = false, _allCaps = false;
 var _spacing = 0;           // extra spacing in % of fontSize (0 = normal)
 var _strokeColor = 'none';
 var _strokeWidth = 0;
+var _strokeOffset = 0;  // gap between text and stroke (outside)
 
 /* ══════════ Modal ══════════ */
 function open(){
@@ -291,8 +292,10 @@ function syncColor(){
 function syncStroke(){
   var si = document.getElementById('teStrokeColor');
   var sw = document.getElementById('teStrokeWidth');
+  var so = document.getElementById('teStrokeOffset');
   _strokeColor = si?si.value:'none';
   _strokeWidth = parseFloat(sw?sw.value:0)||0;
+  _strokeOffset = parseFloat(so?so.value:0)||0;
   _refreshPreview();
 }
 
@@ -363,9 +366,9 @@ function _textToSvg(text, font, heightMm, color, opts){
   var upm = font.unitsPerEm||1000;
 
   // ── Measure x-height (lowercase body) for sizing ──
-  var refPath = font.getPath('xon', 0, 0, upm);
-  var refBb = refPath.getBoundingBox();
-  var refH = refBb.y2 - refBb.y1;
+  var refPath, refBb, refH;
+  try{ refPath = font.getPath('xon', 0, 0, upm); refBb = refPath.getBoundingBox(); refH = refBb.y2 - refBb.y1; }
+  catch(_){ refH = 0; }
   if(refH <= 0) refH = upm * 0.5; // fallback
 
   var fontSize = (heightMm / refH) * upm;
@@ -373,15 +376,24 @@ function _textToSvg(text, font, heightMm, color, opts){
 
   // ── Render path data ──
   var dAttr, bb;
-  if(Math.abs(extraSp) > 0.01){
-    // glyph-by-glyph for letter spacing
-    var result = _renderGlyphs(font, text, 0, fontSize, extraSp);
-    if(!result) return null;
-    dAttr = result.d; bb = result.bb;
-  } else {
-    var path = font.getPath(text, 0, 0, fontSize);
-    bb = path.getBoundingBox();
-    dAttr = _pd(path);
+  try{
+    if(Math.abs(extraSp) > 0.01){
+      var result = _renderGlyphs(font, text, 0, fontSize, extraSp);
+      if(!result) return null;
+      dAttr = result.d; bb = result.bb;
+    } else {
+      var path = font.getPath(text, 0, 0, fontSize);
+      bb = path.getBoundingBox();
+      dAttr = _pd(path);
+    }
+  } catch(pathErr){
+    console.warn('[TE] Font path error (possibly unsupported GSUB table):', pathErr.message);
+    // Fallback: try without substitution by rendering glyph-by-glyph
+    try{
+      var fbResult = _renderGlyphs(font, text, 0, fontSize, extraSp);
+      if(!fbResult) return null;
+      dAttr = fbResult.d; bb = fbResult.bb;
+    } catch(_){ return null; }
   }
   if(!dAttr || dAttr.length < 2) return null;
   var w = bb.x2 - bb.x1;
@@ -391,17 +403,9 @@ function _textToSvg(text, font, heightMm, color, opts){
   // ── Shift to origin ──
   var tx = (-bb.x1), ty = (-bb.y1);
 
-  // ── Build path attributes ──
-  var fillAttr = ' fill="'+color+'"';
-  var strokeAttr = '';
-  if(opts.simulateBold) strokeAttr += ' stroke="'+color+'" stroke-width="'+(fontSize*0.022).toFixed(1)+'" stroke-linejoin="round"';
-  if(opts.strokeColor && opts.strokeColor !== 'none' && opts.strokeWidth > 0)
-    strokeAttr += ' stroke="'+opts.strokeColor+'" stroke-width="'+opts.strokeWidth+'" stroke-linejoin="round"';
-
   // ── Italic simulation: skew transform ──
   var transforms = 'translate('+_r(tx)+','+_r(ty)+')';
   if(opts.simulateItalic){
-    // Skew around center
     transforms += ' skewX(-12)';
     var skewExtra = h * Math.tan(12 * Math.PI/180);
     w += skewExtra;
@@ -409,7 +413,33 @@ function _textToSvg(text, font, heightMm, color, opts){
     transforms = 'translate('+_r(tx)+','+_r(ty)+') skewX(-12)';
   }
 
-  var svgInner = '<path d="'+dAttr+'"'+fillAttr+strokeAttr+' transform="'+transforms+'"/>';
+  // ── Build SVG paths: outside stroke first (behind), then fill on top ──
+  var svgInner = '';
+  var hasStroke = opts.strokeColor && opts.strokeColor !== 'none' && opts.strokeWidth > 0;
+  var strokeOffset = opts.strokeOffset || 0;
+
+  if(hasStroke){
+    // Outside stroke: rendered first (behind fill). Effective outward width = strokeWidth + offset.
+    // We double it because SVG strokes are centered — half goes under the fill path painted on top.
+    var outerSW = (opts.strokeWidth + strokeOffset) * 2;
+    svgInner += '<path d="'+dAttr+'" fill="'+opts.strokeColor+'" stroke="'+opts.strokeColor+'" stroke-width="'+_r(outerSW)+'" stroke-linejoin="round" transform="'+transforms+'"/>';
+    // Expand viewBox to accommodate outer stroke
+    var expand = opts.strokeWidth + strokeOffset;
+    tx += expand; ty += expand;
+    w += expand * 2; h += expand * 2;
+    transforms = 'translate('+_r(tx)+','+_r(ty)+')';
+    if(opts.simulateItalic){
+      var se2 = (bb.y2-bb.y1) * Math.tan(12*Math.PI/180);
+      transforms += ' skewX(-12)';
+    }
+    // Re-render stroke path with expanded translate
+    svgInner = '<path d="'+dAttr+'" fill="'+opts.strokeColor+'" stroke="'+opts.strokeColor+'" stroke-width="'+_r(outerSW)+'" stroke-linejoin="round" transform="'+transforms+'"/>';
+  }
+
+  // Fill path (on top)
+  var fillStrokeAttr = '';
+  if(opts.simulateBold) fillStrokeAttr = ' stroke="'+color+'" stroke-width="'+(fontSize*0.022).toFixed(1)+'" stroke-linejoin="round"';
+  svgInner += '<path d="'+dAttr+'" fill="'+color+'"'+fillStrokeAttr+' transform="'+transforms+'"/>';
 
   // ── Underline ──
   if(opts.underline){
@@ -448,22 +478,31 @@ function _refreshPreview(){
 
     if(_allCaps) text = text.toUpperCase();
     var upm = font.unitsPerEm||1000;
-    var refPath = font.getPath('xon',0,0,upm);
-    var refBb = refPath.getBoundingBox();
-    var refH = refBb.y2 - refBb.y1;
+    var refH;
+    try{ var refPath = font.getPath('xon',0,0,upm); var refBb = refPath.getBoundingBox(); refH = refBb.y2 - refBb.y1; }
+    catch(_){ refH = 0; }
     if(refH<=0) refH = upm*0.5;
     var fontSize = (40/refH)*upm; // 40 "units" for preview
     var extraSp = _spacing * fontSize / 100;
 
     var dAttr, bb;
-    if(Math.abs(extraSp) > 0.01){
-      var result = _renderGlyphs(font, text, 0, fontSize, extraSp);
-      if(!result){ el.innerHTML='<span style="color:#9ca3af">Geen preview</span>'; return; }
-      dAttr = result.d; bb = result.bb;
-    } else {
-      var path = font.getPath(text, 0, 0, fontSize);
-      bb = path.getBoundingBox();
-      dAttr = _pd(path);
+    try{
+      if(Math.abs(extraSp) > 0.01){
+        var result = _renderGlyphs(font, text, 0, fontSize, extraSp);
+        if(!result){ el.innerHTML='<span style="color:#9ca3af">Geen preview</span>'; return; }
+        dAttr = result.d; bb = result.bb;
+      } else {
+        var path = font.getPath(text, 0, 0, fontSize);
+        bb = path.getBoundingBox();
+        dAttr = _pd(path);
+      }
+    } catch(gsubErr){
+      // Fallback for fonts with unsupported GSUB tables (e.g. substFormat 2)
+      try{
+        var fbR = _renderGlyphs(font, text, 0, fontSize, extraSp);
+        if(!fbR){ el.innerHTML='<span style="color:#9ca3af">Geen preview</span>'; return; }
+        dAttr = fbR.d; bb = fbR.bb;
+      } catch(_){ el.innerHTML='<span style="color:#9ca3af">Geen preview</span>'; return; }
     }
     if(!dAttr||dAttr.length<2){ el.innerHTML='<span style="color:#9ca3af">Geen preview</span>'; return; }
     var w = bb.x2-bb.x1, h = bb.y2-bb.y1;
@@ -478,12 +517,25 @@ function _refreshPreview(){
       transforms = 'translate('+_r(tx)+','+_r(ty)+') skewX(-12)';
     }
     var simBold = _bold && !_loadedFonts[_currentName+'__700_'+(_italic?'italic':'normal')];
-    var strokeA = '';
-    if(simBold) strokeA += ' stroke="'+color+'" stroke-width="'+(fontSize*0.022).toFixed(1)+'"';
-    if(_strokeColor&&_strokeColor!=='none'&&_strokeWidth>0) strokeA += ' stroke="'+_strokeColor+'" stroke-width="'+_strokeWidth+'"';
+    var hasStroke = _strokeColor&&_strokeColor!=='none'&&_strokeWidth>0;
+
+    // Expand viewBox for outside stroke
+    if(hasStroke){
+      var expand = _strokeWidth + _strokeOffset;
+      tx += expand; ty += expand; vw += expand*2; vh += expand*2;
+      transforms = 'translate('+_r(tx)+','+_r(ty)+')';
+      if(simItalic) transforms += ' skewX(-12)';
+    }
 
     var svgH = '<svg viewBox="0 0 '+_r(vw)+' '+_r(vh)+'" style="max-width:100%;max-height:90px;display:block;margin:0 auto" xmlns="http://www.w3.org/2000/svg">';
-    svgH += '<path d="'+dAttr+'" fill="'+color+'"'+strokeA+' transform="'+transforms+'"/>';
+    // Outside stroke layer (behind)
+    if(hasStroke){
+      var outerSW = (_strokeWidth + _strokeOffset) * 2;
+      svgH += '<path d="'+dAttr+'" fill="'+_strokeColor+'" stroke="'+_strokeColor+'" stroke-width="'+_r(outerSW)+'" stroke-linejoin="round" transform="'+transforms+'"/>';
+    }
+    // Fill layer (on top)
+    var simBoldA = simBold ? ' stroke="'+color+'" stroke-width="'+(fontSize*0.022).toFixed(1)+'" stroke-linejoin="round"' : '';
+    svgH += '<path d="'+dAttr+'" fill="'+color+'"'+simBoldA+' transform="'+transforms+'"/>';
     if(_underline){
       var ly = _r(ty + fontSize*0.08);
       svgH += '<line x1="2" y1="'+ly+'" x2="'+_r(vw-2)+'" y2="'+ly+'" stroke="'+color+'" stroke-width="'+_r(fontSize*0.04)+'"/>';
@@ -524,7 +576,7 @@ async function addTexts(){
     var result = _textToSvg(line, font, sizeMm, color, {
       bold:_bold, italic:_italic, underline:_underline, allCaps:_allCaps,
       spacing:_spacing, simulateBold:simBold, simulateItalic:simItalic,
-      strokeColor:_strokeColor, strokeWidth:_strokeWidth,
+      strokeColor:_strokeColor, strokeWidth:_strokeWidth, strokeOffset:_strokeOffset,
     });
     if(!result){ console.warn('[TE] Empty SVG for:',line); return; }
     if(window.loadSvg){ window.loadSvg(result.svg, line); added++; }
