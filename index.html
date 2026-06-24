@@ -248,6 +248,17 @@ window.addEventListener('load', ()=>{
   .te-color-hex{font-size:.78rem;font-family:'SF Mono','Roboto Mono',monospace;color:var(--muted);letter-spacing:.5px}
   /* Preview */
   .te-preview{min-height:50px;padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;text-align:center}
+  /* Toggle buttons */
+  .te-tog-row{display:flex;gap:4px}
+  .te-tog{width:34px;height:34px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:7px;background:var(--bg);cursor:pointer;font-size:.88rem;color:var(--fg);transition:all .15s;padding:0;font-family:'Inter',sans-serif}
+  .te-tog:hover{border-color:var(--primary);background:var(--bg-light)}
+  .te-tog.te-tog-on{background:var(--primary);color:#fff;border-color:var(--primary)}
+  /* Upload font button */
+  .te-upload-btn{flex:1;background:none;border:1px dashed var(--border);color:var(--fg);border-radius:8px;padding:6px 10px;font-size:.74rem;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap}
+  .te-upload-btn:hover{border-color:var(--primary);color:var(--primary);background:var(--bg-light)}
+  .te-upload-btn svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+  /* Used fonts tags */
+  .te-used-tag{display:inline-block;background:var(--bg-light);border:1px solid var(--border);border-radius:6px;padding:2px 10px;font-size:.74rem;color:var(--fg);margin:2px 4px 2px 0}
 
   .logo-load-overlay{display:none;position:absolute;inset:0;z-index:150;background:rgba(0,0,0,.25);align-items:center;justify-content:center;pointer-events:none}
   .logo-load-overlay.active{display:flex}
@@ -646,11 +657,6 @@ window.addEventListener('load', ()=>{
             <div class="ud-name" id="userMenuName">Gebruiker</div>
             <div class="ud-email" id="userMenuEmail"></div>
           </div>
-          <button class="ud-item" onclick="document.getElementById('gsbFileInput').click();gsLoginUI.toggleUserMenu()">
-            <svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-            Project openen (.gsb)
-          </button>
-          <input type="file" id="gsbFileInput" accept=".gsb,.json" style="display:none" onchange="if(this.files[0])window.gsbImportProject(this.files[0]);this.value=''">
           <button class="ud-item" onclick="gsLoginUI.openProjects()">
             <svg viewBox="0 0 24 24"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
             Mijn projecten
@@ -679,6 +685,11 @@ window.addEventListener('load', ()=>{
       <div class="section" id="projectTitleSection">
         <div class="section-head"><span class="num">1</span><h3 data-i18n="projectTitleLabel">Opdracht naam</h3></div>
         <input type="text" class="project-title-input" id="projectTitleInput" placeholder="Bijv. borstlogo's bedrijf X" data-i18n-placeholder="projectTitlePlaceholder">
+        <button class="te-small-btn" style="margin-top:6px;width:100%;justify-content:center" onclick="document.getElementById('gsbFileInput').click()">
+          <svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          Opdracht openen (.gsb)
+        </button>
+        <input type="file" id="gsbFileInput" accept=".gsb,.json" style="display:none" onchange="if(this.files[0])window.gsbImportProject(this.files[0]);this.value=''">
       </div>
 
       <div class="section">
@@ -830,7 +841,7 @@ window.addEventListener('load', ()=>{
           <button class="btn export-btn-bg" id="exportBgBtn" data-i18n="exportBgBtn">Download drukproef</button>
           <button class="btn export-btn-bg" id="saveProjectBtn" onclick="window.gsbExportProject()">
             <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-            Opslaan
+            Opdracht opslaan
           </button>
         </div>
         <button class="btn btn-grad-fill export-btn-big" id="exportBtn" data-i18n="exportBtn">Download print-ready PDF</button>
@@ -902,7 +913,7 @@ window.addEventListener('load', ()=>{
         <tr><td style="padding:3px 8px 3px 0;color:var(--muted)">0</td><td style="padding:3px 0" data-i18n="zoomFit">Passend</td></tr>
       </table>
     </div>
-    <p class="version-tag">v2.5.1 · 23-06-2026</p>
+    <p class="version-tag">v2.6.0 · 23-06-2026</p>
   </div>
 </div>
 
@@ -1011,31 +1022,46 @@ window.addEventListener('load', ()=>{
     </div>
     <div class="gsb-modal-body" style="padding:18px 22px">
 
-      <!-- ── Font picker ── -->
+      <!-- ── Font picker + upload row ── -->
       <div class="te-field">
         <label>Lettertype</label>
-        <div class="te-fp">
-          <div class="te-fp-trigger" onclick="gsbTextEditor.togglePicker()">
-            <span class="te-fp-label" id="teFontLabel">Kies een lettertype…</span>
-            <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+        <div style="display:flex;gap:8px;align-items:stretch">
+          <div class="te-fp" style="flex:2">
+            <div class="te-fp-trigger" onclick="gsbTextEditor.togglePicker()">
+              <span class="te-fp-label" id="teFontLabel">Kies een lettertype…</span>
+              <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+            </div>
+            <div class="te-fp-panel" id="teFontPanel">
+              <input type="text" class="te-fp-search" id="teFontSearch" placeholder="Zoek lettertype…" oninput="gsbTextEditor.onSearch()" onclick="event.stopPropagation()">
+              <div class="te-fp-list" id="teFontList"></div>
+            </div>
           </div>
-          <div class="te-fp-panel" id="teFontPanel">
-            <input type="text" class="te-fp-search" id="teFontSearch" placeholder="Zoek lettertype…" oninput="gsbTextEditor.onSearch()" onclick="event.stopPropagation()">
-            <div class="te-fp-list" id="teFontList"></div>
-          </div>
+          <button class="te-upload-btn" onclick="document.getElementById('teCustomFontInput').click()">
+            <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Upload eigen font
+          </button>
         </div>
       </div>
-      <div style="display:flex;align-items:center;gap:8px;margin:4px 0 8px">
-        <button class="te-small-btn" onclick="document.getElementById('teCustomFontInput').click()">
-          <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-          Eigen font (.ttf / .otf)
-        </button>
-        <span id="teFontStatus" style="font-size:.72rem;min-height:14px"></span>
-      </div>
       <input type="file" id="teCustomFontInput" accept=".ttf,.otf,.woff" style="display:none" onchange="gsbTextEditor.onCustomFontUpload()">
+      <div id="teFontStatus" style="font-size:.72rem;min-height:14px;margin:2px 0 6px"></div>
 
-      <!-- ── Size + Color row ── -->
-      <div class="te-row" style="margin-top:6px">
+      <!-- ── Styling toggles + spacing ── -->
+      <div class="te-row" style="margin-bottom:10px;align-items:center">
+        <div class="te-tog-row">
+          <button class="te-tog" id="teBtnBold" onclick="gsbTextEditor.toggleBold()" title="Vet"><b>B</b></button>
+          <button class="te-tog" id="teBtnItalic" onclick="gsbTextEditor.toggleItalic()" title="Cursief"><i>I</i></button>
+          <button class="te-tog" id="teBtnUnderline" onclick="gsbTextEditor.toggleUnderline()" title="Onderstreept"><u>U</u></button>
+          <button class="te-tog" id="teBtnCaps" onclick="gsbTextEditor.toggleAllCaps()" title="Hoofdletters">AA</button>
+        </div>
+        <div style="flex:1;display:flex;align-items:center;gap:6px;min-width:0">
+          <label style="font-size:.68rem;color:var(--muted);white-space:nowrap;margin:0">Spacing</label>
+          <input type="range" id="teSpacing" min="-5" max="20" step="1" value="0" style="flex:1;accent-color:var(--primary)" oninput="gsbTextEditor.onSpacingChange()">
+          <span id="teSpacingVal" style="font-size:.72rem;font-weight:600;color:var(--fg);min-width:22px;text-align:center">0</span>
+        </div>
+      </div>
+
+      <!-- ── Size + Color + Stroke row ── -->
+      <div class="te-row">
         <div class="te-field" style="flex:1">
           <label>Hoogte</label>
           <div style="display:flex;gap:6px">
@@ -1051,6 +1077,13 @@ window.addEventListener('load', ()=>{
           <div class="te-color-wrap">
             <input type="color" id="teColor" value="#000000" oninput="gsbTextEditor.syncColor()">
             <span class="te-color-hex" id="teColorHex">#000000</span>
+          </div>
+        </div>
+        <div class="te-field" style="flex:0 0 auto">
+          <label>Stroke</label>
+          <div class="te-color-wrap">
+            <input type="color" id="teStrokeColor" value="#FFFFFF" oninput="gsbTextEditor.syncStroke()">
+            <input type="number" id="teStrokeWidth" class="te-input" value="0" min="0" max="20" step="0.5" style="width:48px;padding:4px 6px;font-size:.78rem" oninput="gsbTextEditor.syncStroke()" title="Stroke dikte">
           </div>
         </div>
       </div>
@@ -1082,6 +1115,14 @@ window.addEventListener('load', ()=>{
       <button class="btn btn-grad-fill" style="width:100%;margin-top:14px;padding:12px 16px;font-size:.92rem;border-radius:10px" onclick="gsbTextEditor.addTexts()">
         Tekst toevoegen aan vel
       </button>
+
+      <!-- ── Used fonts ── -->
+      <div class="te-field" style="margin-top:14px">
+        <label>Gebruikte lettertypes in deze opdracht</label>
+        <div id="teUsedFonts" style="min-height:20px">
+          <span style="color:#9ca3af;font-size:.78rem">Nog geen teksten op het vel</span>
+        </div>
+      </div>
     </div>
   </div>
 </div>
