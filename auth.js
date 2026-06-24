@@ -357,6 +357,31 @@ async function getUserEmail(userId){
   return null; // email is available via auth only on server side
 }
 
+/* ── Admin: create user ── */
+async function adminCreateUser(email, password, displayName, companyName, role){
+  const client = getClient();
+  if(!client) return { error: { message: 'Supabase niet geladen' } };
+  if(!_isAdmin) return { error: { message: 'Alleen admins kunnen accounts aanmaken' } };
+  // Use signUp via Supabase (will auto-confirm if email confirmation is off)
+  // We temporarily sign up the new user, then restore admin session
+  const adminSession = (await client.auth.getSession()).data?.session;
+  const { data, error } = await client.auth.signUp({
+    email, password,
+    options: { data: { display_name: displayName || '', company_name: companyName || '' } }
+  });
+  if(error) return { error };
+  // Restore admin session
+  if(adminSession) await client.auth.setSession(adminSession);
+  // Update role if needed
+  if(data?.user && role && role !== 'user'){
+    try{
+      const { error: roleErr } = await client.from('profiles').update({ role }).eq('id', data.user.id);
+      if(roleErr) console.warn('Could not set role:', roleErr.message);
+    }catch(_){}
+  }
+  return { data };
+}
+
 /* ── Expose API ── */
 window.gsAuth = {
   init,
@@ -365,6 +390,7 @@ window.gsAuth = {
   saveProject, loadProject, listProjects, deleteProject,
   listUsers, updateUserRole, toggleBlockUser,
   listAllProjects,
+  adminCreateUser,
   getSettings, updateSetting,
   getUsageStats,
   logUsage: _logUsage,

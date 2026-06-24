@@ -295,8 +295,25 @@ async function _loadAdminUsers(){
   if(!container) return;
   container.innerHTML = '<p style="color:var(--muted)">Laden...</p>';
   const { data } = await gsAuth.listUsers();
-  if(!data || data.length === 0){ container.innerHTML = '<p>Geen gebruikers gevonden.</p>'; return; }
-  container.innerHTML = `<table class="admin-table">
+
+  // Build "create account" form + user table
+  let html = `<div class="admin-create-form" id="adminCreateForm">
+    <h4 style="margin:0 0 10px;font-size:.82rem;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Account aanmaken</h4>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+      <div style="flex:1;min-width:140px"><label class="admin-lbl">Naam</label><input type="text" id="adminNewName" class="admin-inp" placeholder="Volledige naam"></div>
+      <div style="flex:1;min-width:140px"><label class="admin-lbl">Bedrijf</label><input type="text" id="adminNewCompany" class="admin-inp" placeholder="Bedrijfsnaam"></div>
+      <div style="flex:1.5;min-width:180px"><label class="admin-lbl">E-mail</label><input type="email" id="adminNewEmail" class="admin-inp" placeholder="naam@bedrijf.nl"></div>
+      <div style="flex:1;min-width:120px"><label class="admin-lbl">Wachtwoord</label><input type="text" id="adminNewPw" class="admin-inp" placeholder="Min. 6 tekens"></div>
+      <div style="flex:0 0 auto"><label class="admin-lbl">Rol</label><select id="adminNewRole" class="admin-inp"><option value="user">Gebruiker</option><option value="admin">Admin</option></select></div>
+      <button class="btn btn-primary btn-sm" style="height:34px;white-space:nowrap" onclick="gsLoginUI.adminCreateUser()">+ Aanmaken</button>
+    </div>
+    <p id="adminCreateMsg" style="font-size:.78rem;margin:6px 0 0;min-height:16px"></p>
+  </div>
+  <div style="height:1px;background:var(--border);margin:14px 0"></div>`;
+
+  if(!data || data.length === 0){ html += '<p>Geen gebruikers gevonden.</p>'; }
+  else {
+    html += `<table class="admin-table">
     <thead><tr><th>Naam</th><th>Bedrijf</th><th>Rol</th><th>Status</th><th>Aangemeld</th><th>Actie</th></tr></thead>
     <tbody>${data.map(u => {
       const date = new Date(u.created_at).toLocaleDateString('nl-NL', { day:'numeric', month:'short', year:'numeric' });
@@ -314,6 +331,29 @@ async function _loadAdminUsers(){
         <td>${u.id !== gsAuth.user?.id ? `<button class="btn-sm btn ${u.blocked ? 'btn-primary' : 'btn-accent'}" onclick="gsLoginUI.toggleBlock('${u.id}',${!u.blocked})">${u.blocked ? 'Deblokkeren' : 'Blokkeren'}</button>` : ''}</td>
       </tr>`;
     }).join('')}</tbody></table>`;
+  }
+  container.innerHTML = html;
+}
+
+async function adminCreateUser(){
+  const name = document.getElementById('adminNewName')?.value?.trim() || '';
+  const company = document.getElementById('adminNewCompany')?.value?.trim() || '';
+  const email = document.getElementById('adminNewEmail')?.value?.trim() || '';
+  const pw = document.getElementById('adminNewPw')?.value || '';
+  const role = document.getElementById('adminNewRole')?.value || 'user';
+  const msg = document.getElementById('adminCreateMsg');
+  if(!email || !pw){ if(msg) msg.innerHTML='<span style="color:#ef4444">E-mail en wachtwoord zijn verplicht</span>'; return; }
+  if(pw.length < 6){ if(msg) msg.innerHTML='<span style="color:#ef4444">Wachtwoord moet minimaal 6 tekens zijn</span>'; return; }
+  if(msg) msg.innerHTML='<span style="color:var(--muted)">Account aanmaken...</span>';
+  const result = await gsAuth.adminCreateUser(email, pw, name, company, role);
+  if(result.error){
+    if(msg) msg.innerHTML='<span style="color:#ef4444">Fout: '+_esc(result.error.message||result.error)+'</span>';
+  } else {
+    if(msg) msg.innerHTML='<span style="color:#22c55e">Account aangemaakt voor '+_esc(email)+'</span>';
+    // Clear fields
+    ['adminNewName','adminNewCompany','adminNewEmail','adminNewPw'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+    _loadAdminUsers();
+  }
 }
 
 async function changeRole(userId, role){
@@ -405,6 +445,7 @@ window.gsLoginUI = {
   openSaveDialog, closeSaveDialog, confirmSave,
   openProfile, handleProfileSave,
   openAdmin, adminTab, changeRole, toggleBlock,
+  adminCreateUser,
   saveSetting,
 };
 

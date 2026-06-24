@@ -551,6 +551,10 @@ window.addEventListener('load', ()=>{
   .admin-table .badge-user{background:var(--bg-light);color:var(--muted)}
   .admin-table .badge-blocked{background:#fef2f2;color:var(--error)}
   .admin-table .btn-sm{padding:4px 10px;font-size:.75rem;border-radius:6px}
+  .admin-create-form{padding:12px 0}
+  .admin-lbl{display:block;font-size:.68rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px}
+  .admin-inp{width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:.82rem;font-family:'Inter',sans-serif;background:var(--bg);color:var(--fg);outline:none;transition:border-color .15s}
+  .admin-inp:focus{border-color:var(--primary)}
 
   /* ── Projects grid ── */
   .projects-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px}
@@ -685,8 +689,8 @@ window.addEventListener('load', ()=>{
       <div class="section" id="projectTitleSection">
         <div class="section-head"><span class="num">1</span><h3 data-i18n="projectTitleLabel">Opdracht naam</h3></div>
         <input type="text" class="project-title-input" id="projectTitleInput" placeholder="Bijv. borstlogo's bedrijf X" data-i18n-placeholder="projectTitlePlaceholder">
-        <button class="te-small-btn" style="margin-top:6px;width:100%;justify-content:center" onclick="document.getElementById('gsbFileInput').click()">
-          <svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        <button class="btn export-btn-bg" style="width:100%;margin-top:8px;padding:10px 16px;font-size:.85rem;border-radius:8px;gap:6px;display:flex;align-items:center;justify-content:center" onclick="document.getElementById('gsbFileInput').click()">
+          <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
           Opdracht openen (.gsb)
         </button>
         <input type="file" id="gsbFileInput" accept=".gsb,.json" style="display:none" onchange="if(this.files[0])window.gsbImportProject(this.files[0]);this.value=''">
@@ -698,7 +702,7 @@ window.addEventListener('load', ()=>{
       </div>
 
       <div class="section">
-        <div class="section-head"><span class="num">3</span><h3 data-i18n="step2">Logo's uploaden of tekst maken</h3></div>
+        <div class="section-head"><span class="num">3</span><h3 data-i18n="step2">Upload logo's of maak tekst</h3></div>
         <div class="upload-area" id="uploadArea">
           <strong data-i18n="dropTitle">Klik of sleep hier</strong>
           <p data-i18n="dropHint">SVG, AI, EPS, PDF, PNG, JPG</p>
@@ -847,10 +851,6 @@ window.addEventListener('load', ()=>{
             <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
             Opdracht opslaan
           </button>
-          <button class="btn export-btn-bg" onclick="document.getElementById('gsbFileInput').click()">
-            <svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-            Opdracht laden
-          </button>
         </div>
         <button class="btn btn-grad-fill export-btn-big" id="exportBtn" data-i18n="exportBtn">Download print-ready PDF</button>
       </div>
@@ -921,7 +921,7 @@ window.addEventListener('load', ()=>{
         <tr><td style="padding:3px 8px 3px 0;color:var(--muted)">0</td><td style="padding:3px 0" data-i18n="zoomFit">Passend</td></tr>
       </table>
     </div>
-    <p class="version-tag">v2.6.1 · 24-06-2026</p>
+    <p class="version-tag">v2.7.0 · 24-06-2026</p>
   </div>
 </div>
 
@@ -1096,7 +1096,9 @@ window.addEventListener('load', ()=>{
         </div>
         <div class="te-field" style="flex:0 0 auto">
           <label>Afstand</label>
-          <input type="number" id="teStrokeOffset" class="te-input" value="0" min="0" max="20" step="0.5" style="width:56px;padding:8px 6px;font-size:.78rem;text-align:center" oninput="gsbTextEditor.syncStroke()" title="Afstand stroke vanaf tekst">
+          <div class="te-color-wrap" style="padding:4px 6px">
+            <input type="number" id="teStrokeOffset" class="te-input" value="0" min="0" max="20" step="0.5" style="width:48px;padding:4px 6px;font-size:.78rem;border:none;text-align:center;background:transparent" oninput="gsbTextEditor.syncStroke()" title="Afstand stroke vanaf tekst">
+          </div>
         </div>
       </div>
 

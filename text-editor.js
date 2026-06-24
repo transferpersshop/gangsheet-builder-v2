@@ -1,6 +1,6 @@
 /* ================================================================
    text-editor.js — Tekst-naar-SVG creator voor Gang Sheet Builder
-   v2.6.1 — font picker, styling, spacing, outside stroke + offset, x-height sizing
+   v2.7.0 — font picker (80+ fonts incl. sport/college), styling, outside stroke + offset
    ================================================================ */
 (function(){
 'use strict';
@@ -30,6 +30,22 @@ var FONTS = [
   {n:'Sacramento',id:'sacramento'},{n:'Satisfy',id:'satisfy'},{n:'Caveat',id:'caveat'},
   {n:'Indie Flower',id:'indie-flower'},{n:'Shadows Into Light',id:'shadows-into-light'},
   {n:'Kalam',id:'kalam'},{n:'Roboto Mono',id:'roboto-mono'},{n:'Source Code Pro',id:'source-code-pro'},
+  // ── Sport / Jersey ──
+  {n:'Saira Stencil One',id:'saira-stencil-one'},{n:'Saira Condensed',id:'saira-condensed'},
+  {n:'Saira Extra Condensed',id:'saira-extra-condensed'},{n:'Racing Sans One',id:'racing-sans-one'},
+  {n:'Ceviche One',id:'ceviche-one'},{n:'Faster One',id:'faster-one'},
+  // ── College / University ──
+  {n:'Graduate',id:'graduate'},{n:'Holtwood One SC',id:'holtwood-one-sc'},
+  {n:'Aldrich',id:'aldrich'},{n:'Squada One',id:'squada-one'},
+  // ── Athletic / Bold Display ──
+  {n:'Big Shoulders Display',id:'big-shoulders-display'},{n:'Big Shoulders Stencil Display',id:'big-shoulders-stencil-display'},
+  {n:'Fjalla One',id:'fjalla-one'},{n:'Hammersmith One',id:'hammersmith-one'},
+  {n:'Jockey One',id:'jockey-one'},{n:'Secular One',id:'secular-one'},
+  {n:'Sigmar One',id:'sigmar-one'},{n:'Exo 2',id:'exo-2'},
+  {n:'Kanit',id:'kanit'},{n:'Chakra Petch',id:'chakra-petch'},{n:'Tourney',id:'tourney'},
+  // ── Stencil / Military ──
+  {n:'Quantico',id:'quantico'},{n:'Michroma',id:'michroma'},
+  {n:'Audiowide',id:'audiowide'},{n:'Contrail One',id:'contrail-one'},
 ];
 var FONT_CDN = 'https://cdn.jsdelivr.net/fontsource/fonts/';
 
@@ -419,24 +435,19 @@ function _textToSvg(text, font, heightMm, color, opts){
   var strokeOffset = opts.strokeOffset || 0;
 
   if(hasStroke){
-    // Outside stroke: rendered first (behind fill). Effective outward width = strokeWidth + offset.
-    // We double it because SVG strokes are centered — half goes under the fill path painted on top.
-    var outerSW = (opts.strokeWidth + strokeOffset) * 2;
-    svgInner += '<path d="'+dAttr+'" fill="'+opts.strokeColor+'" stroke="'+opts.strokeColor+'" stroke-width="'+_r(outerSW)+'" stroke-linejoin="round" transform="'+transforms+'"/>';
-    // Expand viewBox to accommodate outer stroke
+    // Expand viewBox first to make room for stroke on all sides
     var expand = opts.strokeWidth + strokeOffset;
     tx += expand; ty += expand;
     w += expand * 2; h += expand * 2;
+    // Rebuild transforms with expanded offset
     transforms = 'translate('+_r(tx)+','+_r(ty)+')';
-    if(opts.simulateItalic){
-      var se2 = (bb.y2-bb.y1) * Math.tan(12*Math.PI/180);
-      transforms += ' skewX(-12)';
-    }
-    // Re-render stroke path with expanded translate
-    svgInner = '<path d="'+dAttr+'" fill="'+opts.strokeColor+'" stroke="'+opts.strokeColor+'" stroke-width="'+_r(outerSW)+'" stroke-linejoin="round" transform="'+transforms+'"/>';
+    if(opts.simulateItalic) transforms += ' skewX(-12)';
+    // Outside stroke layer: doubled width (SVG strokes are centered, fill covers inner half)
+    var outerSW = (opts.strokeWidth + strokeOffset) * 2;
+    svgInner += '<path d="'+dAttr+'" fill="'+opts.strokeColor+'" stroke="'+opts.strokeColor+'" stroke-width="'+_r(outerSW)+'" stroke-linejoin="round" transform="'+transforms+'"/>';
   }
 
-  // Fill path (on top)
+  // Fill path (on top, same transform)
   var fillStrokeAttr = '';
   if(opts.simulateBold) fillStrokeAttr = ' stroke="'+color+'" stroke-width="'+(fontSize*0.022).toFixed(1)+'" stroke-linejoin="round"';
   svgInner += '<path d="'+dAttr+'" fill="'+color+'"'+fillStrokeAttr+' transform="'+transforms+'"/>';
@@ -457,6 +468,18 @@ function _textToSvg(text, font, heightMm, color, opts){
     +svgInner+'</svg>';
 
   return { svg:svg, mmW:w, mmH:h };
+}
+
+/* ══════════ Light color detection ══════════ */
+function _isLightColor(hex){
+  hex = (hex||'').replace('#','');
+  if(hex.length===3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+  var r = parseInt(hex.substring(0,2),16)/255;
+  var g = parseInt(hex.substring(2,4),16)/255;
+  var b = parseInt(hex.substring(4,6),16)/255;
+  // Relative luminance (sRGB)
+  var lum = 0.2126*r + 0.7152*g + 0.0722*b;
+  return lum > 0.65;
 }
 
 /* ══════════ Preview ══════════ */
@@ -526,6 +549,13 @@ function _refreshPreview(){
       transforms = 'translate('+_r(tx)+','+_r(ty)+')';
       if(simItalic) transforms += ' skewX(-12)';
     }
+
+    // Auto dark background for light text colors
+    var bgStyle = '';
+    if(_isLightColor(color)){
+      bgStyle = 'background:#1a1a1a;border-radius:6px;padding:4px';
+    }
+    el.style.cssText = bgStyle ? bgStyle : '';
 
     var svgH = '<svg viewBox="0 0 '+_r(vw)+' '+_r(vh)+'" style="max-width:100%;max-height:90px;display:block;margin:0 auto" xmlns="http://www.w3.org/2000/svg">';
     // Outside stroke layer (behind)
