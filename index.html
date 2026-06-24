@@ -259,6 +259,23 @@ window.addEventListener('load', ()=>{
   .te-upload-btn svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
   /* Used fonts tags */
   .te-used-tag{display:inline-block;background:var(--bg-light);border:1px solid var(--border);border-radius:6px;padding:2px 10px;font-size:.74rem;color:var(--fg);margin:2px 4px 2px 0}
+  /* Tab bar */
+  .te-tab-bar{display:flex;gap:0;margin:0 0 14px;border-bottom:2px solid var(--border);padding:0}
+  .te-tab{flex:1;padding:9px 0;text-align:center;font-size:.82rem;font-weight:600;color:var(--muted);background:none;border:none;cursor:pointer;transition:all .15s;border-bottom:2px solid transparent;margin-bottom:-2px}
+  .te-tab:hover{color:var(--fg)}
+  .te-tab.te-tab-on{color:var(--primary);border-bottom-color:var(--primary)}
+  .te-pane{display:none}
+  .te-pane.te-pane-on{display:block}
+  /* Jersey specific */
+  .j-defaults{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px}
+  .j-def-item{display:flex;flex-direction:column;gap:3px}
+  .j-def-item label{font-size:.68rem;color:var(--muted);margin:0;display:flex;align-items:center;gap:4px}
+  .j-def-item input[type=number]{width:100%;padding:5px 7px;font-size:.78rem;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--fg);text-align:center}
+  .j-def-item input[type=number]:disabled{opacity:.5;background:var(--bg-light)}
+  .j-toggle-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+  .j-fields{display:flex;gap:8px;margin-bottom:6px}
+  .j-fields .te-field{flex:2}
+  .j-fields .te-field:last-child{flex:1}
 
   .logo-load-overlay{display:none;position:absolute;inset:0;z-index:150;background:rgba(0,0,0,.25);align-items:center;justify-content:center;pointer-events:none}
   .logo-load-overlay.active{display:flex}
@@ -921,7 +938,7 @@ window.addEventListener('load', ()=>{
         <tr><td style="padding:3px 8px 3px 0;color:var(--muted)">0</td><td style="padding:3px 0" data-i18n="zoomFit">Passend</td></tr>
       </table>
     </div>
-    <p class="version-tag">v2.7.0 · 24-06-2026</p>
+    <p class="version-tag">v2.8.0 · 24-06-2026</p>
   </div>
 </div>
 
@@ -1068,18 +1085,8 @@ window.addEventListener('load', ()=>{
         </div>
       </div>
 
-      <!-- ── Size + Color + Stroke row ── -->
-      <div class="te-row">
-        <div class="te-field" style="flex:1">
-          <label>Hoogte</label>
-          <div style="display:flex;gap:6px">
-            <input type="number" id="teSizeMm" class="te-input" value="30" min="1" max="999" step="1" style="flex:1" oninput="gsbTextEditor.updatePreview()">
-            <select id="teSizeUnit" class="te-input" style="width:68px">
-              <option value="mm">mm</option>
-              <option value="cm">cm</option>
-            </select>
-          </div>
-        </div>
+      <!-- ── Color + Stroke row (shared) ── -->
+      <div class="te-row" style="margin-bottom:10px">
         <div class="te-field" style="flex:0 0 auto">
           <label>Kleur</label>
           <div class="te-color-wrap">
@@ -1102,33 +1109,134 @@ window.addEventListener('load', ()=>{
         </div>
       </div>
 
-      <!-- ── Text area ── -->
-      <div class="te-field" style="margin-top:12px">
-        <label>Tekst <span style="font-weight:400;opacity:.65">(één naam per regel voor batch)</span></label>
-        <textarea id="teTextInput" class="te-input" rows="4" placeholder="Jan&#10;Piet&#10;Klaas" oninput="gsbTextEditor.updatePreview()"></textarea>
+      <!-- ── Tab bar ── -->
+      <div class="te-tab-bar">
+        <button class="te-tab te-tab-on" data-tab="tekst" onclick="gsbTextEditor.switchTab('tekst')">Tekst</button>
+        <button class="te-tab" data-tab="rugnummers" onclick="gsbTextEditor.switchTab('rugnummers')">Rugnummers</button>
       </div>
 
-      <!-- ── CSV import ── -->
-      <div style="margin-top:6px">
-        <button class="te-small-btn" onclick="document.getElementById('teCsvInput').click()">
-          <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-          Importeer namen uit CSV / Excel
-        </button>
-        <input type="file" id="teCsvInput" accept=".csv,.txt,.xlsx" style="display:none" onchange="gsbTextEditor.onCsvImport()">
-      </div>
-
-      <!-- ── Preview ── -->
-      <div class="te-field" style="margin-top:14px">
-        <label>Preview</label>
-        <div id="tePreview" class="te-preview">
-          <span style="color:#9ca3af;font-size:.82rem">Kies een lettertype om preview te zien</span>
+      <!-- ══════ PANE: Tekst ══════ -->
+      <div id="tePane_tekst" class="te-pane te-pane-on">
+        <!-- Height -->
+        <div class="te-row" style="margin-bottom:10px">
+          <div class="te-field" style="flex:1">
+            <label>Hoogte</label>
+            <div style="display:flex;gap:6px">
+              <input type="number" id="teSizeMm" class="te-input" value="30" min="1" max="999" step="1" style="flex:1" oninput="gsbTextEditor.updatePreview()">
+              <select id="teSizeUnit" class="te-input" style="width:68px">
+                <option value="mm">mm</option>
+                <option value="cm">cm</option>
+              </select>
+            </div>
+          </div>
         </div>
+
+        <!-- Text area -->
+        <div class="te-field">
+          <label>Tekst <span style="font-weight:400;opacity:.65">(één naam per regel voor batch)</span></label>
+          <textarea id="teTextInput" class="te-input" rows="4" placeholder="Jan&#10;Piet&#10;Klaas" oninput="gsbTextEditor.updatePreview()"></textarea>
+        </div>
+
+        <!-- CSV import -->
+        <div style="margin-top:6px">
+          <button class="te-small-btn" onclick="document.getElementById('teCsvInput').click()">
+            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            Importeer namen uit CSV / Excel
+          </button>
+          <input type="file" id="teCsvInput" accept=".csv,.txt,.xlsx" style="display:none" onchange="gsbTextEditor.onCsvImport()">
+        </div>
+
+        <!-- Preview -->
+        <div class="te-field" style="margin-top:14px">
+          <label>Preview</label>
+          <div id="tePreview" class="te-preview">
+            <span style="color:#9ca3af;font-size:.82rem">Kies een lettertype om preview te zien</span>
+          </div>
+        </div>
+
+        <!-- Submit -->
+        <button class="btn btn-grad-fill" style="width:100%;margin-top:14px;padding:12px 16px;font-size:.92rem;border-radius:10px" onclick="gsbTextEditor.addTexts()">
+          Tekst toevoegen aan vel
+        </button>
       </div>
 
-      <!-- ── Submit ── -->
-      <button class="btn btn-grad-fill" style="width:100%;margin-top:14px;padding:12px 16px;font-size:.92rem;border-radius:10px" onclick="gsbTextEditor.addTexts()">
-        Tekst toevoegen aan vel
-      </button>
+      <!-- ══════ PANE: Rugnummers ══════ -->
+      <div id="tePane_rugnummers" class="te-pane">
+        <!-- Default heights -->
+        <div class="te-field" style="margin-bottom:4px">
+          <label>Standaard afmetingen <span style="font-weight:400;opacity:.65">(mm)</span></label>
+        </div>
+        <div class="j-defaults">
+          <div class="j-def-item">
+            <label><input type="checkbox" id="jDef_nameH" checked onchange="gsbTextEditor.jToggleDefault('nameH')"> Naam hoogte</label>
+            <input type="number" id="jVal_nameH" value="30" min="1" max="200" step="1" disabled oninput="gsbTextEditor.jPreview()">
+          </div>
+          <div class="j-def-item">
+            <label><input type="checkbox" id="jDef_numH" checked onchange="gsbTextEditor.jToggleDefault('numH')"> Nummer hoogte</label>
+            <input type="number" id="jVal_numH" value="80" min="1" max="300" step="1" disabled oninput="gsbTextEditor.jPreview()">
+          </div>
+          <div class="j-def-item">
+            <label><input type="checkbox" id="jDef_gap" checked onchange="gsbTextEditor.jToggleDefault('gap')"> Tussenafstand</label>
+            <input type="number" id="jVal_gap" value="5" min="0" max="50" step="1" disabled oninput="gsbTextEditor.jPreview()">
+          </div>
+        </div>
+
+        <!-- Extra toggles -->
+        <div class="j-toggle-row">
+          <button class="te-tog" id="jBtnCurved" onclick="gsbTextEditor.jToggleCurved()" title="Naam gebogen boven nummer" style="width:auto;padding:0 10px;font-size:.72rem;gap:4px">
+            <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;flex-shrink:0"><path d="M4 16c0-6 4-12 8-12s8 6 8 12"/></svg>
+            Gebogen
+          </button>
+          <button class="te-tog te-tog-on" id="jBtnStrokeName" onclick="gsbTextEditor.jToggleStrokeName()" title="Stroke op naam" style="width:auto;padding:0 10px;font-size:.72rem">
+            Stroke naam
+          </button>
+          <button class="te-tog te-tog-on" id="jBtnStrokeNum" onclick="gsbTextEditor.jToggleStrokeNum()" title="Stroke op nummer" style="width:auto;padding:0 10px;font-size:.72rem">
+            Stroke nummer
+          </button>
+        </div>
+
+        <!-- Name + Number fields -->
+        <div class="j-fields">
+          <div class="te-field">
+            <label>Naam <span style="font-weight:400;opacity:.65">(één per regel)</span></label>
+            <textarea id="jName" class="te-input" rows="4" placeholder="Jansen&#10;De Vries&#10;Bakker" oninput="gsbTextEditor.jPreview()"></textarea>
+          </div>
+          <div class="te-field">
+            <label>Rugnummer</label>
+            <textarea id="jNum" class="te-input" rows="4" placeholder="1&#10;2&#10;3" oninput="gsbTextEditor.jPreview()"></textarea>
+          </div>
+        </div>
+
+        <!-- Import / template / auto-increment -->
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+          <button class="te-small-btn" onclick="document.getElementById('jCsvInput').click()" style="flex:1">
+            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            Importeer Excel / CSV
+          </button>
+          <input type="file" id="jCsvInput" accept=".csv,.txt,.xlsx" style="display:none" onchange="gsbTextEditor.jImportExcel()">
+          <button class="te-small-btn" onclick="gsbTextEditor.jDownloadTemplate()" style="flex:1">
+            <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download template
+          </button>
+          <button class="te-small-btn" onclick="gsbTextEditor.jAutoNumber()" style="flex:1">
+            <svg viewBox="0 0 24 24"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><text x="3" y="7" style="font-size:7px;fill:currentColor;font-weight:700">1</text><text x="3" y="13" style="font-size:7px;fill:currentColor;font-weight:700">2</text><text x="3" y="19" style="font-size:7px;fill:currentColor;font-weight:700">3</text></svg>
+            Doornummeren
+          </button>
+        </div>
+
+        <!-- Preview -->
+        <div class="te-field" style="margin-top:14px">
+          <label>Preview</label>
+          <div id="jPreview" class="te-preview">
+            <span style="color:#9ca3af;font-size:.82rem">Kies een lettertype om preview te zien</span>
+          </div>
+        </div>
+
+        <!-- Submit -->
+        <button class="btn btn-grad-fill" style="width:100%;margin-top:14px;padding:12px 16px;font-size:.92rem;border-radius:10px" onclick="gsbTextEditor.addJerseys()">
+          Rugnummers toevoegen aan vel
+        </button>
+      </div>
 
       <!-- ── Used fonts ── -->
       <div class="te-field" style="margin-top:14px">

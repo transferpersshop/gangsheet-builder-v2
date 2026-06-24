@@ -429,28 +429,28 @@ function _textToSvg(text, font, heightMm, color, opts){
     transforms = 'translate('+_r(tx)+','+_r(ty)+') skewX(-12)';
   }
 
-  // ── Build SVG paths: outside stroke first (behind), then fill on top ──
+  // ── Build SVG path with outside-aligned stroke via paint-order ──
   var svgInner = '';
   var hasStroke = opts.strokeColor && opts.strokeColor !== 'none' && opts.strokeWidth > 0;
   var strokeOffset = opts.strokeOffset || 0;
 
   if(hasStroke){
-    // Expand viewBox first to make room for stroke on all sides
+    // Expand viewBox to make room for outward stroke on all sides
     var expand = opts.strokeWidth + strokeOffset;
     tx += expand; ty += expand;
     w += expand * 2; h += expand * 2;
-    // Rebuild transforms with expanded offset
     transforms = 'translate('+_r(tx)+','+_r(ty)+')';
     if(opts.simulateItalic) transforms += ' skewX(-12)';
-    // Outside stroke layer: doubled width (SVG strokes are centered, fill covers inner half)
+    // paint-order:stroke fill → stroke drawn first (behind), then fill covers inner half
+    // SVG stroke-width doubled because only outer half is visible
     var outerSW = (opts.strokeWidth + strokeOffset) * 2;
-    svgInner += '<path d="'+dAttr+'" fill="'+opts.strokeColor+'" stroke="'+opts.strokeColor+'" stroke-width="'+_r(outerSW)+'" stroke-linejoin="round" transform="'+transforms+'"/>';
+    svgInner += '<path d="'+dAttr+'" fill="'+color+'" stroke="'+opts.strokeColor+'" stroke-width="'+_r(outerSW)+'" stroke-linejoin="round" paint-order="stroke fill" transform="'+transforms+'"/>';
+  } else {
+    // No stroke — simple fill path
+    var fillStrokeAttr = '';
+    if(opts.simulateBold) fillStrokeAttr = ' stroke="'+color+'" stroke-width="'+(fontSize*0.022).toFixed(1)+'" stroke-linejoin="round"';
+    svgInner += '<path d="'+dAttr+'" fill="'+color+'"'+fillStrokeAttr+' transform="'+transforms+'"/>';
   }
-
-  // Fill path (on top, same transform)
-  var fillStrokeAttr = '';
-  if(opts.simulateBold) fillStrokeAttr = ' stroke="'+color+'" stroke-width="'+(fontSize*0.022).toFixed(1)+'" stroke-linejoin="round"';
-  svgInner += '<path d="'+dAttr+'" fill="'+color+'"'+fillStrokeAttr+' transform="'+transforms+'"/>';
 
   // ── Underline ──
   if(opts.underline){
@@ -558,14 +558,14 @@ function _refreshPreview(){
     el.style.cssText = bgStyle ? bgStyle : '';
 
     var svgH = '<svg viewBox="0 0 '+_r(vw)+' '+_r(vh)+'" style="max-width:100%;max-height:90px;display:block;margin:0 auto" xmlns="http://www.w3.org/2000/svg">';
-    // Outside stroke layer (behind)
     if(hasStroke){
+      // Single path with paint-order: stroke painted first (behind), fill covers inner half
       var outerSW = (_strokeWidth + _strokeOffset) * 2;
-      svgH += '<path d="'+dAttr+'" fill="'+_strokeColor+'" stroke="'+_strokeColor+'" stroke-width="'+_r(outerSW)+'" stroke-linejoin="round" transform="'+transforms+'"/>';
+      svgH += '<path d="'+dAttr+'" fill="'+color+'" stroke="'+_strokeColor+'" stroke-width="'+_r(outerSW)+'" stroke-linejoin="round" paint-order="stroke fill" transform="'+transforms+'"/>';
+    } else {
+      var simBoldA = simBold ? ' stroke="'+color+'" stroke-width="'+(fontSize*0.022).toFixed(1)+'" stroke-linejoin="round"' : '';
+      svgH += '<path d="'+dAttr+'" fill="'+color+'"'+simBoldA+' transform="'+transforms+'"/>';
     }
-    // Fill layer (on top)
-    var simBoldA = simBold ? ' stroke="'+color+'" stroke-width="'+(fontSize*0.022).toFixed(1)+'" stroke-linejoin="round"' : '';
-    svgH += '<path d="'+dAttr+'" fill="'+color+'"'+simBoldA+' transform="'+transforms+'"/>';
     if(_underline){
       var ly = _r(ty + fontSize*0.08);
       svgH += '<line x1="2" y1="'+ly+'" x2="'+_r(vw-2)+'" y2="'+ly+'" stroke="'+color+'" stroke-width="'+_r(fontSize*0.04)+'"/>';
@@ -644,6 +644,417 @@ function _getUsedFontsFromCanvas(){
   return Object.keys(set);
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   RUGNUMMERS TAB — Jersey name + number generator
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Tab switching ── */
+function switchTab(tab){
+  var tabs = document.querySelectorAll('.te-tab');
+  var panes = document.querySelectorAll('.te-pane');
+  tabs.forEach(function(t){ t.classList.toggle('te-tab-on', t.dataset.tab === tab); });
+  panes.forEach(function(p){ p.classList.toggle('te-pane-on', p.id === 'tePane_'+tab); });
+}
+
+/* ── Jersey defaults ── */
+var JD = {
+  nameH: 30, numH: 80, gap: 5, // mm
+  curved: false,
+  strokeName: true, strokeNum: true,
+};
+
+function jToggleDefault(field){
+  var cb = document.getElementById('jDef_'+field);
+  var inp = document.getElementById('jVal_'+field);
+  if(!cb || !inp) return;
+  if(cb.checked){
+    inp.value = field==='nameH'?30:field==='numH'?80:5;
+    inp.disabled = true;
+  } else {
+    inp.disabled = false;
+  }
+  _jRefreshPreview();
+}
+
+function jToggleCurved(){
+  JD.curved = !JD.curved;
+  var btn = document.getElementById('jBtnCurved');
+  if(btn) btn.classList.toggle('te-tog-on', JD.curved);
+  _jRefreshPreview();
+}
+
+function jToggleStrokeName(){
+  JD.strokeName = !JD.strokeName;
+  var btn = document.getElementById('jBtnStrokeName');
+  if(btn) btn.classList.toggle('te-tog-on', JD.strokeName);
+  _jRefreshPreview();
+}
+
+function jToggleStrokeNum(){
+  JD.strokeNum = !JD.strokeNum;
+  var btn = document.getElementById('jBtnStrokeNum');
+  if(btn) btn.classList.toggle('te-tog-on', JD.strokeNum);
+  _jRefreshPreview();
+}
+
+/* ── Auto increment ── */
+function jAutoNumber(){
+  var nameEl = document.getElementById('jName');
+  var numEl = document.getElementById('jNum');
+  if(!numEl) return;
+  var num = parseInt(numEl.value)||1;
+  // If there's only one name, fill is simple
+  var names = (nameEl?nameEl.value:'').split('\n').map(function(l){return l.trim();}).filter(Boolean);
+  if(names.length <= 1){
+    if(window.toast) window.toast('Voeg meerdere namen toe (één per regel) om door te nummeren','warn');
+    return;
+  }
+  var nums = [];
+  for(var i=0;i<names.length;i++) nums.push(String(num+i));
+  numEl.value = nums.join('\n');
+  if(window.toast) window.toast('Rugnummers '+num+' t/m '+(num+names.length-1)+' ingevuld','success');
+  _jRefreshPreview();
+}
+
+/* ── Excel template download ── */
+function jDownloadTemplate(){
+  // Simple CSV template (Excel-compatible)
+  var csv = 'NAAM,RUGNUMMER\nJansen,1\nDe Vries,2\nBakker,3\n';
+  var blob = new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = 'rugnummers-template.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+/* ── Excel/CSV import for jersey ── */
+function jImportExcel(){
+  var inp = document.getElementById('jCsvInput');
+  if(!inp||!inp.files||!inp.files[0]) return;
+  var reader = new FileReader();
+  reader.onload = function(ev){
+    var lines = ev.target.result.split(/[\r\n]+/).map(function(l){return l.trim();}).filter(Boolean);
+    var names = [], nums = [];
+    // Skip header if it contains NAAM/RUGNUMMER
+    var start = 0;
+    if(lines.length && /naam|name|rugnummer|number/i.test(lines[0])) start = 1;
+    for(var i=start;i<lines.length;i++){
+      var parts = lines[i].split(/[,;\t]/);
+      if(parts.length >= 2){
+        names.push(parts[0].trim());
+        nums.push(parts[1].trim());
+      } else if(parts.length === 1){
+        names.push(parts[0].trim());
+      }
+    }
+    var ne = document.getElementById('jName');
+    var nu = document.getElementById('jNum');
+    if(ne) ne.value = names.join('\n');
+    if(nu) nu.value = nums.join('\n');
+    if(window.toast) window.toast(names.length+' spelers geïmporteerd','success');
+    _jRefreshPreview();
+  };
+  reader.readAsText(inp.files[0]);
+  inp.value = '';
+}
+
+/* ── Curved text: render name along an arc ── */
+function _curvedTextSvg(text, font, heightMm, color, arcWidthMm, opts){
+  // Render each glyph along a circular arc
+  text = text.toUpperCase();
+  if(!text.trim()) return null;
+  var upm = font.unitsPerEm||1000;
+  var refH;
+  try{ var rp = font.getPath('xon',0,0,upm); var rb = rp.getBoundingBox(); refH = rb.y2-rb.y1; }catch(_){ refH=0; }
+  if(refH<=0) refH=upm*0.5;
+  var fontSize = (heightMm/refH)*upm;
+  var scale = fontSize/(font.unitsPerEm||1000);
+  var glyphs;
+  try{ glyphs = font.stringToGlyphs(text); }catch(_){ return null; }
+  if(!glyphs||!glyphs.length) return null;
+
+  // Calculate total text width
+  var totalAdv = 0;
+  for(var i=0;i<glyphs.length;i++){
+    totalAdv += (glyphs[i].advanceWidth||0)*scale;
+    if(i<glyphs.length-1) try{ totalAdv += font.getKerningValue(glyphs[i],glyphs[i+1])*scale; }catch(_){}
+  }
+  totalAdv += (opts.spacing||0) * fontSize / 100 * (glyphs.length-1);
+
+  // Arc parameters: chord = arcWidthMm (or text width * 1.2 if wider)
+  var chord = Math.max(arcWidthMm||totalAdv*1.3, totalAdv*1.1);
+  // Radius to create a gentle arc — larger = flatter
+  var arcAngle = Math.min(totalAdv / chord * 2.5, Math.PI * 0.6); // max ~108 degrees
+  var radius = chord / (2 * Math.sin(arcAngle/2));
+  if(radius < chord * 0.6) radius = chord * 0.6;
+
+  // Place each glyph along the arc
+  var cx = chord/2;
+  var cy = radius + heightMm;
+  var startAngle = -Math.PI/2 - arcAngle/2;
+  var currentArc = 0;
+  var totalArcLen = radius * arcAngle;
+  // Center text on arc
+  var arcOffset = (totalArcLen - totalAdv) / 2;
+  currentArc = arcOffset;
+
+  var svgParts = '';
+  var extraSp = (opts.spacing||0) * fontSize / 100;
+
+  for(var gi=0;gi<glyphs.length;gi++){
+    var g = glyphs[gi];
+    var adv = (g.advanceWidth||0)*scale;
+    var angle = startAngle + (currentArc + adv/2) / radius;
+    var gx = cx + radius * Math.cos(angle);
+    var gy = cy + radius * Math.sin(angle);
+    var rotDeg = (angle + Math.PI/2) * 180/Math.PI;
+
+    try{
+      var p = g.getPath(0, 0, fontSize);
+      var d = _pd(p);
+      if(d){
+        var gb = p.getBoundingBox();
+        var gtx = -(gb.x1+gb.x2)/2;
+        var gty = -gb.y1;
+        svgParts += '<path d="'+d+'" fill="'+color+'"';
+        if(opts.hasStroke && opts.strokeColor && opts.strokeColor!=='none' && opts.strokeWidth>0){
+          var sw = (opts.strokeWidth + (opts.strokeOffset||0)) * 2;
+          svgParts += ' stroke="'+opts.strokeColor+'" stroke-width="'+_r(sw)+'" stroke-linejoin="round" paint-order="stroke fill"';
+        }
+        svgParts += ' transform="translate('+_r(gx)+','+_r(gy)+') rotate('+_r(rotDeg)+') translate('+_r(gtx)+','+_r(gty)+')"/>';
+      }
+    }catch(_){}
+
+    currentArc += adv + extraSp;
+    if(gi<glyphs.length-1) try{ currentArc += font.getKerningValue(g,glyphs[gi+1])*scale; }catch(_){}
+  }
+
+  if(!svgParts) return null;
+  var svgH = cy - radius + heightMm*0.2;
+  var expand = (opts.hasStroke && opts.strokeWidth>0) ? opts.strokeWidth+(opts.strokeOffset||0) : 0;
+  var vw = chord + expand*2;
+  var vh = svgH + expand*2;
+  return { svg:svgParts, w:vw, h:vh, offsetX:expand, offsetY:expand, chord:chord };
+}
+
+/* ── Jersey preview ── */
+function _jRefreshPreview(){
+  var el = document.getElementById('jPreview');
+  if(!el) return;
+  if(!_currentFont){ el.innerHTML='<span style="color:#9ca3af;font-size:.82rem">Kies een lettertype</span>'; return; }
+
+  var nameEl = document.getElementById('jName');
+  var numEl = document.getElementById('jNum');
+  var name = ((nameEl?nameEl.value:'')||'').split('\n')[0] || 'JANSEN';
+  var num = ((numEl?numEl.value:'')||'').split('\n')[0] || '10';
+  name = name.toUpperCase();
+
+  var ci = document.getElementById('teColor');
+  var color = ci?ci.value:'#000000';
+
+  var nameH = parseFloat(document.getElementById('jVal_nameH')?.value)||30;
+  var numH = parseFloat(document.getElementById('jVal_numH')?.value)||80;
+  var gap = parseFloat(document.getElementById('jVal_gap')?.value)||5;
+
+  try{
+    var font = _currentFont;
+    var wt = _bold?'700':'400', st = _italic?'italic':'normal';
+    var k = _currentName+'__'+wt+'_'+st;
+    if(_loadedFonts[k]) font = _loadedFonts[k];
+
+    // Scale for preview (fit in ~100px height)
+    var totalH = nameH + gap + numH;
+    var previewScale = 80 / totalH;
+    var pNameH = nameH * previewScale;
+    var pNumH = numH * previewScale;
+    var pGap = gap * previewScale;
+
+    // Render number
+    var numResult = _previewPath(font, num, pNumH);
+    if(!numResult){ el.innerHTML='<span style="color:#9ca3af">Geen preview</span>'; return; }
+
+    var svgContent = '';
+    var svgW = numResult.w + 10;
+    var yOffset = 4;
+
+    // Render name (curved or straight)
+    if(JD.curved){
+      var curved = _curvedTextSvg(name, font, pNameH, color, numResult.w, {
+        spacing:_spacing, hasStroke:JD.strokeName, strokeColor:_strokeColor, strokeWidth:_strokeWidth*previewScale, strokeOffset:_strokeOffset*previewScale,
+      });
+      if(curved){
+        var nameX = (svgW - curved.w)/2;
+        svgContent += '<g transform="translate('+_r(nameX)+','+_r(yOffset)+')">' + curved.svg + '</g>';
+        yOffset += curved.h + pGap;
+        svgW = Math.max(svgW, curved.w + 10);
+      }
+    } else {
+      var nameResult = _previewPath(font, name, pNameH);
+      if(nameResult){
+        var nameStroke = '';
+        if(JD.strokeName && _strokeColor && _strokeColor!=='none' && _strokeWidth>0){
+          var nsw = (_strokeWidth + _strokeOffset) * previewScale * 2;
+          nameStroke = ' stroke="'+_strokeColor+'" stroke-width="'+_r(nsw)+'" stroke-linejoin="round" paint-order="stroke fill"';
+        }
+        var nameX2 = (svgW - nameResult.w)/2;
+        svgContent += '<path d="'+nameResult.d+'" fill="'+color+'"'+nameStroke+' transform="translate('+_r(nameX2+(-nameResult.bb.x1))+','+_r(yOffset+(-nameResult.bb.y1))+')"/>';
+        yOffset += nameResult.h + pGap;
+        svgW = Math.max(svgW, nameResult.w + 10);
+      }
+    }
+
+    // Number
+    var numStroke = '';
+    if(JD.strokeNum && _strokeColor && _strokeColor!=='none' && _strokeWidth>0){
+      var nsw2 = (_strokeWidth + _strokeOffset) * previewScale * 2;
+      numStroke = ' stroke="'+_strokeColor+'" stroke-width="'+_r(nsw2)+'" stroke-linejoin="round" paint-order="stroke fill"';
+    }
+    var numX = (svgW - numResult.w)/2;
+    svgContent += '<path d="'+numResult.d+'" fill="'+color+'"'+numStroke+' transform="translate('+_r(numX+(-numResult.bb.x1))+','+_r(yOffset+(-numResult.bb.y1))+')"/>';
+    yOffset += numResult.h + 4;
+
+    // Auto dark background
+    if(_isLightColor(color)) el.style.cssText = 'background:#1a1a1a;border-radius:6px;padding:4px';
+    else el.style.cssText = '';
+
+    el.innerHTML = '<svg viewBox="0 0 '+_r(svgW)+' '+_r(yOffset)+'" style="max-width:100%;max-height:120px;display:block;margin:0 auto" xmlns="http://www.w3.org/2000/svg">'+svgContent+'</svg>';
+  }catch(e){
+    el.innerHTML = '<span style="color:#ef4444;font-size:.82rem">Preview fout: '+_esc(e.message||'')+'</span>';
+  }
+}
+
+function _previewPath(font, text, h){
+  var upm = font.unitsPerEm||1000;
+  var refH; try{ var rp=font.getPath('xon',0,0,upm);var rb=rp.getBoundingBox();refH=rb.y2-rb.y1;}catch(_){refH=0;}
+  if(refH<=0)refH=upm*0.5;
+  var fontSize=(h/refH)*upm;
+  var extraSp = _spacing*fontSize/100;
+  var dAttr,bb;
+  try{
+    if(Math.abs(extraSp)>0.01){ var r=_renderGlyphs(font,text,0,fontSize,extraSp); if(!r)return null; dAttr=r.d;bb=r.bb; }
+    else{ var p=font.getPath(text,0,0,fontSize);bb=p.getBoundingBox();dAttr=_pd(p); }
+  }catch(_){
+    try{var r2=_renderGlyphs(font,text,0,fontSize,extraSp);if(!r2)return null;dAttr=r2.d;bb=r2.bb;}catch(_2){return null;}
+  }
+  if(!dAttr||dAttr.length<2)return null;
+  var w=bb.x2-bb.x1,hh=bb.y2-bb.y1;
+  if(w<=0||hh<=0)return null;
+  return {d:dAttr,bb:bb,w:w,h:hh,fontSize:fontSize};
+}
+
+/* ── Add jerseys to canvas ── */
+async function addJerseys(){
+  if(!_currentFont){ if(window.toast) window.toast('Kies eerst een lettertype','warn'); return; }
+  var nameEl = document.getElementById('jName');
+  var numEl = document.getElementById('jNum');
+  var namesRaw = (nameEl?nameEl.value:'').trim();
+  var numsRaw = (numEl?numEl.value:'').trim();
+  if(!namesRaw && !numsRaw){ if(window.toast) window.toast('Voer namen of nummers in','warn'); return; }
+
+  var names = namesRaw.split('\n').map(function(l){return l.trim();});
+  var nums = numsRaw.split('\n').map(function(l){return l.trim();});
+  var count = Math.max(names.length, nums.length);
+
+  var ci = document.getElementById('teColor');
+  var color = ci?ci.value:'#000000';
+  var nameH = parseFloat(document.getElementById('jVal_nameH')?.value)||30;
+  var numH = parseFloat(document.getElementById('jVal_numH')?.value)||80;
+  var gap = parseFloat(document.getElementById('jVal_gap')?.value)||5;
+
+  var font;
+  try{font=await _getStyledFont();}catch(_){font=_currentFont;}
+  if(!font) font=_currentFont;
+  var simBold=_needsSimBold(), simItalic=_needsSimItalic();
+
+  var added = 0;
+  for(var i=0;i<count;i++){
+    var name = (names[i]||'').toUpperCase();
+    var num = nums[i]||'';
+    if(!name && !num) continue;
+
+    // Build combined SVG: name on top, number below
+    var parts = [];
+    var totalW = 0, totalH = 0;
+
+    // Number SVG (rendered first to know width for curved name)
+    var numSvg = null;
+    if(num){
+      numSvg = _textToSvg(num, font, numH, color, {
+        bold:_bold, italic:_italic, underline:false, allCaps:false,
+        spacing:_spacing, simulateBold:simBold, simulateItalic:simItalic,
+        strokeColor: JD.strokeNum?_strokeColor:'none', strokeWidth:JD.strokeNum?_strokeWidth:0, strokeOffset:JD.strokeNum?_strokeOffset:0,
+      });
+      if(numSvg) totalW = Math.max(totalW, numSvg.mmW);
+    }
+
+    // Name SVG
+    var nameSvgData = null;
+    if(name){
+      if(JD.curved && numSvg){
+        // Curved name above number
+        nameSvgData = _curvedTextSvg(name, font, nameH, color, numSvg.mmW, {
+          spacing:_spacing, hasStroke:JD.strokeName, strokeColor:_strokeColor, strokeWidth:_strokeWidth, strokeOffset:_strokeOffset,
+        });
+        if(nameSvgData){
+          totalW = Math.max(totalW, nameSvgData.w);
+          totalH += nameSvgData.h + gap;
+        }
+      } else {
+        nameSvgData = _textToSvg(name, font, nameH, color, {
+          bold:_bold, italic:_italic, underline:false, allCaps:true,
+          spacing:_spacing, simulateBold:simBold, simulateItalic:simItalic,
+          strokeColor: JD.strokeName?_strokeColor:'none', strokeWidth:JD.strokeName?_strokeWidth:0, strokeOffset:JD.strokeName?_strokeOffset:0,
+        });
+        if(nameSvgData){
+          totalW = Math.max(totalW, nameSvgData.mmW);
+          totalH += nameSvgData.mmH + gap;
+        }
+      }
+    }
+    if(numSvg) totalH += numSvg.mmH;
+
+    // Combine into single SVG
+    var combinedParts = '';
+    var yOff = 0;
+    if(name && nameSvgData){
+      if(JD.curved && nameSvgData.svg){
+        // Curved: raw SVG parts, center horizontally
+        var cx = (totalW - nameSvgData.w)/2 + nameSvgData.offsetX;
+        combinedParts += '<g transform="translate('+_r(cx)+','+_r(yOff + nameSvgData.offsetY)+')">' + nameSvgData.svg + '</g>';
+        yOff += nameSvgData.h + gap;
+      } else if(nameSvgData.svg){
+        // Straight: embed as sub-SVG
+        var nx = (totalW - nameSvgData.mmW)/2;
+        combinedParts += '<svg x="'+_r(nx)+'" y="'+_r(yOff)+'" width="'+_r(nameSvgData.mmW)+'" height="'+_r(nameSvgData.mmH)+'" viewBox="0 0 '+_r(nameSvgData.mmW)+' '+_r(nameSvgData.mmH)+'">';
+        // Extract inner SVG content
+        var innerMatch = nameSvgData.svg.match(/<svg[^>]*>([\s\S]*)<\/svg>/);
+        if(innerMatch) combinedParts += innerMatch[1];
+        combinedParts += '</svg>';
+        yOff += nameSvgData.mmH + gap;
+      }
+    }
+    if(numSvg){
+      var numX = (totalW - numSvg.mmW)/2;
+      combinedParts += '<svg x="'+_r(numX)+'" y="'+_r(yOff)+'" width="'+_r(numSvg.mmW)+'" height="'+_r(numSvg.mmH)+'" viewBox="0 0 '+_r(numSvg.mmW)+' '+_r(numSvg.mmH)+'">';
+      var innerNum = numSvg.svg.match(/<svg[^>]*>([\s\S]*)<\/svg>/);
+      if(innerNum) combinedParts += innerNum[1];
+      combinedParts += '</svg>';
+    }
+
+    if(!combinedParts) continue;
+    var finalSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="'+_r(totalW)+'mm" height="'+_r(totalH)+'mm" viewBox="0 0 '+_r(totalW)+' '+_r(totalH)+'" data-gsb-font="'+_esc(_currentName)+'">' + combinedParts + '</svg>';
+    var label = (name && num) ? name+' #'+num : name||'#'+num;
+    if(window.loadSvg){ window.loadSvg(finalSvg, label); added++; }
+  }
+
+  if(added > 0){
+    if(window.toast) window.toast(added+' rugnummer'+(added>1?'s':'')+' toegevoegd','success');
+    close();
+  } else {
+    if(window.toast) window.toast('Geen rugnummers gegenereerd — controleer invoer','warn');
+  }
+}
+
 /* ══════════ Public API ══════════ */
 window.gsbTextEditor = {
   open:open, close:close,
@@ -658,6 +1069,18 @@ window.gsbTextEditor = {
   syncColor:syncColor, syncStroke:syncStroke,
   addTexts:addTexts,
   updatePreview:_refreshPreview,
+  // Tabs
+  switchTab:switchTab,
+  // Jersey
+  jToggleDefault:jToggleDefault,
+  jToggleCurved:jToggleCurved,
+  jToggleStrokeName:jToggleStrokeName,
+  jToggleStrokeNum:jToggleStrokeNum,
+  jAutoNumber:jAutoNumber,
+  jDownloadTemplate:jDownloadTemplate,
+  jImportExcel:jImportExcel,
+  addJerseys:addJerseys,
+  jPreview:_jRefreshPreview,
 };
 
 })();
