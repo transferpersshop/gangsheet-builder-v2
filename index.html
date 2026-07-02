@@ -38,6 +38,8 @@
     s.onerror=function(){console.error('[GSB] pdf-lib FAILED to load from both CDNs')};
     document.head.appendChild(s);"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<!-- SheetJS: XLSX import/export for jersey template -->
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script>if(window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
 <script>
 // Startup diagnostic — runs after all scripts have had time to load
@@ -247,7 +249,7 @@ window.addEventListener('load', ()=>{
   .te-color-wrap input[type=color]::-webkit-color-swatch{border:1px solid rgba(0,0,0,.12);border-radius:5px}
   .te-color-hex{font-size:.78rem;font-family:'SF Mono','Roboto Mono',monospace;color:var(--muted);letter-spacing:.5px}
   /* Preview */
-  .te-preview{min-height:50px;padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;text-align:center;overflow:visible}
+  .te-preview{min-height:50px;padding:20px;background:var(--bg);border:1px solid var(--border);border-radius:8px;text-align:center;overflow:visible}
   /* Toggle buttons */
   .te-tog-row{display:flex;gap:4px}
   .te-tog{width:34px;height:34px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:7px;background:var(--bg);cursor:pointer;font-size:.88rem;color:var(--fg);transition:all .15s;padding:0;font-family:'Inter',sans-serif}
@@ -260,23 +262,26 @@ window.addEventListener('load', ()=>{
   /* Used fonts tags */
   .te-used-tag{display:inline-block;background:var(--bg-light);border:1px solid var(--border);border-radius:6px;padding:2px 10px;font-size:.74rem;color:var(--fg);margin:2px 4px 2px 0}
   /* Tab bar */
-  .te-tab-bar{display:flex;gap:0;margin:0 0 16px;background:var(--bg-light);border-radius:10px;padding:3px;border:1px solid var(--border)}
-  .te-tab{flex:1;padding:9px 0;text-align:center;font-size:.82rem;font-weight:600;color:var(--muted);background:none;border:none;cursor:pointer;transition:all .18s;border-radius:8px;display:flex;align-items:center;justify-content:center;gap:6px}
-  .te-tab:hover{color:var(--fg)}
-  .te-tab.te-tab-on{color:#fff;background:var(--primary);box-shadow:0 1px 4px rgba(0,0,0,.12)}
-  .te-tab svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+  .te-tab-bar{display:flex;gap:0;margin:0 0 20px;background:none;border-radius:0;padding:0;border:none;border-bottom:2px solid var(--border)}
+  .te-tab{flex:1;padding:14px 0;text-align:center;font-size:.95rem;font-weight:800;font-family:'Nunito',sans-serif;color:var(--muted);background:none;border:none;cursor:pointer;transition:all .18s;border-radius:0;display:flex;align-items:center;justify-content:center;gap:8px;border-bottom:3px solid transparent;margin-bottom:-2px;letter-spacing:.2px}
+  .te-tab:hover{color:var(--text)}
+  .te-tab.te-tab-on{color:var(--primary);border-bottom-color:var(--primary)}
+  .te-tab svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
   .te-pane{display:none}
   .te-pane.te-pane-on{display:block}
   /* Jersey specific */
-  .j-section{background:var(--bg-light);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:12px}
-  .j-section-label{font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin:0 0 8px}
+  .j-section{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+  .j-section-label{font-size:.78rem;font-weight:800;font-family:'Nunito',sans-serif;color:var(--text);margin:0 0 4px}
+  .j-section-hint{font-size:.7rem;color:var(--muted);margin:0 0 10px;line-height:1.4}
   .j-defaults{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
   .j-def-item{display:flex;flex-direction:column;gap:4px}
   .j-def-item label{font-size:.7rem;color:var(--fg);margin:0;display:flex;align-items:center;gap:5px;font-weight:500;cursor:pointer}
   .j-def-item label input[type=checkbox]{accent-color:var(--primary);width:14px;height:14px;cursor:pointer}
   .j-def-item input[type=number]{width:100%;padding:6px 8px;font-size:.8rem;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--fg);text-align:center}
   .j-def-item input[type=number]:disabled{opacity:.45;background:var(--bg-light)}
-  .j-toggle-row{display:flex;gap:6px;flex-wrap:wrap}
+  .j-toggle-row{display:flex;flex-direction:column;gap:8px}
+  .j-check-label{display:flex;align-items:center;gap:8px;font-size:.82rem;color:var(--text);cursor:pointer;user-select:none}
+  .j-check-label input[type=checkbox]{width:16px;height:16px;accent-color:var(--primary);cursor:pointer;flex-shrink:0}
   /* Two-column layout */
   .te-layout{display:flex;gap:24px;align-items:flex-start}
   .te-controls{flex:3;min-width:0}
@@ -956,7 +961,7 @@ window.addEventListener('load', ()=>{
         <tr><td style="padding:3px 8px 3px 0;color:var(--muted)">0</td><td style="padding:3px 0" data-i18n="zoomFit">Passend</td></tr>
       </table>
     </div>
-    <p class="version-tag">v2.9.0 · 02-07-2026</p>
+    <p class="version-tag">v2.10.0 · 02-07-2026</p>
   </div>
 </div>
 
@@ -1058,12 +1063,25 @@ window.addEventListener('load', ()=>{
 
 <!-- ═══ Text Editor modal ═══ -->
 <div class="gsb-modal-backdrop" id="textEditorModal" onclick="if(event.target===this)gsbTextEditor.close()">
-  <div class="gsb-modal" style="max-width:900px">
+  <div class="gsb-modal" style="max-width:1100px">
     <div class="gsb-modal-head">
       <h3>Tekst maken</h3>
       <button class="gsb-modal-close" onclick="gsbTextEditor.close()"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
     <div class="gsb-modal-body" style="padding:18px 22px">
+
+      <!-- ── Tab bar (top of modal) ── -->
+      <div class="te-tab-bar">
+        <button class="te-tab te-tab-on" data-tab="tekst" onclick="gsbTextEditor.switchTab('tekst')">
+          <svg viewBox="0 0 24 24"><path d="M4 7V4h16v3"/><line x1="12" y1="4" x2="12" y2="20"/><line x1="8" y1="20" x2="16" y2="20"/></svg>
+          Platte tekst
+        </button>
+        <button class="te-tab" data-tab="rugnummers" onclick="gsbTextEditor.switchTab('rugnummers')">
+          <svg viewBox="0 0 24 24"><path d="M20.38 3.46L16 2 12 3.46 8 2 3.62 3.46a.59.59 0 0 0-.38.56v16a.59.59 0 0 0 .74.56L8 19.06l4 1.48 4-1.48 4.38 1.48a.59.59 0 0 0 .62-.56V4.02a.59.59 0 0 0-.62-.56z"/><text x="9" y="15" style="font-size:9px;fill:currentColor;font-weight:800;font-family:sans-serif">10</text></svg>
+          Rugnummers
+        </button>
+      </div>
+
       <div class="te-layout">
 
         <!-- ═══ LEFT COLUMN: Controls ═══ -->
@@ -1131,18 +1149,6 @@ window.addEventListener('load', ()=>{
             </div>
           </div>
 
-          <!-- ── Tab bar ── -->
-          <div class="te-tab-bar">
-            <button class="te-tab te-tab-on" data-tab="tekst" onclick="gsbTextEditor.switchTab('tekst')">
-              <svg viewBox="0 0 24 24"><path d="M4 7V4h16v3"/><line x1="12" y1="4" x2="12" y2="20"/><line x1="8" y1="20" x2="16" y2="20"/></svg>
-              Tekst
-            </button>
-            <button class="te-tab" data-tab="rugnummers" onclick="gsbTextEditor.switchTab('rugnummers')">
-              <svg viewBox="0 0 24 24"><path d="M20.38 3.46L16 2 12 3.46 8 2 3.62 3.46a.59.59 0 0 0-.38.56v16a.59.59 0 0 0 .74.56L8 19.06l4 1.48 4-1.48 4.38 1.48a.59.59 0 0 0 .62-.56V4.02a.59.59 0 0 0-.62-.56z"/><text x="9" y="15" style="font-size:9px;fill:currentColor;font-weight:800;font-family:sans-serif">10</text></svg>
-              Rugnummers
-            </button>
-          </div>
-
           <!-- ══════ PANE: Tekst ══════ -->
           <div id="tePane_tekst" class="te-pane te-pane-on">
             <div class="te-row" style="margin-bottom:10px">
@@ -1176,7 +1182,8 @@ window.addEventListener('load', ()=>{
           <!-- ══════ PANE: Rugnummers ══════ -->
           <div id="tePane_rugnummers" class="te-pane">
             <div class="j-section">
-              <div class="j-section-label">Afmetingen (mm) — KNVB standaard</div>
+              <div class="j-section-label">Afmetingen (mm)</div>
+              <div class="j-section-hint">Standaard KNVB maten. Vink uit om handmatig aan te passen.</div>
               <div class="j-defaults">
                 <div class="j-def-item">
                   <label><input type="checkbox" id="jDef_nameH" checked onchange="gsbTextEditor.jToggleDefault('nameH')"> Naam hoogte</label>
@@ -1194,17 +1201,21 @@ window.addEventListener('load', ()=>{
             </div>
             <div class="j-section">
               <div class="j-section-label">Opties</div>
+              <div class="j-section-hint">Pas het uiterlijk van naam en nummer aan.</div>
               <div class="j-toggle-row">
-                <button class="te-tog" id="jBtnCurved" onclick="gsbTextEditor.jToggleCurved()" title="Naam gebogen boven nummer" style="width:auto;padding:0 10px;font-size:.72rem;gap:4px">
-                  <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;flex-shrink:0"><path d="M4 16c0-6 4-12 8-12s8 6 8 12"/></svg>
+                <label class="j-check-label">
+                  <input type="checkbox" id="jChkCurved" onchange="gsbTextEditor.jToggleCurved()">
+                  <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;flex-shrink:0"><path d="M4 16c0-6 4-12 8-12s8 6 8 12"/></svg>
                   Gebogen naam
-                </button>
-                <button class="te-tog te-tog-on" id="jBtnStrokeName" onclick="gsbTextEditor.jToggleStrokeName()" title="Stroke op naam" style="width:auto;padding:0 10px;font-size:.72rem">
-                  Stroke naam
-                </button>
-                <button class="te-tog te-tog-on" id="jBtnStrokeNum" onclick="gsbTextEditor.jToggleStrokeNum()" title="Stroke op nummer" style="width:auto;padding:0 10px;font-size:.72rem">
-                  Stroke nummer
-                </button>
+                </label>
+                <label class="j-check-label">
+                  <input type="checkbox" id="jChkStrokeName" checked onchange="gsbTextEditor.jToggleStrokeName()">
+                  Stroke op naam
+                </label>
+                <label class="j-check-label">
+                  <input type="checkbox" id="jChkStrokeNum" checked onchange="gsbTextEditor.jToggleStrokeNum()">
+                  Stroke op nummer
+                </label>
               </div>
             </div>
 
@@ -1223,12 +1234,12 @@ window.addEventListener('load', ()=>{
             <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:2px">
               <button class="te-small-btn" onclick="document.getElementById('jCsvInput').click()" style="flex:1">
                 <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                Importeer CSV
+                Importeer Excel
               </button>
-              <input type="file" id="jCsvInput" accept=".csv,.txt,.xlsx" style="display:none" onchange="gsbTextEditor.jImportExcel()">
+              <input type="file" id="jCsvInput" accept=".xlsx,.xls,.csv,.txt" style="display:none" onchange="gsbTextEditor.jImportExcel()">
               <button class="te-small-btn" onclick="gsbTextEditor.jDownloadTemplate()" style="flex:1">
                 <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                Template
+                Download template
               </button>
               <button class="te-small-btn" onclick="gsbTextEditor.jAutoNumber()" style="flex:1">
                 <svg viewBox="0 0 24 24"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><text x="3" y="7" style="font-size:7px;fill:currentColor;font-weight:700">1</text><text x="3" y="13" style="font-size:7px;fill:currentColor;font-weight:700">2</text><text x="3" y="19" style="font-size:7px;fill:currentColor;font-weight:700">3</text></svg>
