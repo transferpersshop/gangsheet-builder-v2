@@ -304,7 +304,7 @@ async function _loadAdminUsers(){
       <div style="flex:1;min-width:140px"><label class="admin-lbl">Bedrijf</label><input type="text" id="adminNewCompany" class="admin-inp" placeholder="Bedrijfsnaam"></div>
       <div style="flex:1.5;min-width:180px"><label class="admin-lbl">E-mail</label><input type="email" id="adminNewEmail" class="admin-inp" placeholder="naam@bedrijf.nl"></div>
       <div style="flex:1;min-width:120px"><label class="admin-lbl">Wachtwoord</label><input type="text" id="adminNewPw" class="admin-inp" placeholder="Min. 6 tekens"></div>
-      <div style="flex:0 0 auto"><label class="admin-lbl">Rol</label><select id="adminNewRole" class="admin-inp"><option value="user">Gebruiker</option><option value="admin">Admin</option></select></div>
+      <div style="flex:0 0 auto"><label class="admin-lbl">Rol</label><select id="adminNewRole" class="admin-inp"><option value="user">Gebruiker</option><option value="printer">Printer</option><option value="admin">Admin</option></select></div>
       <button class="btn btn-primary btn-sm" style="height:34px;white-space:nowrap" onclick="gsLoginUI.adminCreateUser()">+ Aanmaken</button>
     </div>
     <p id="adminCreateMsg" style="font-size:.78rem;margin:6px 0 0;min-height:16px"></p>
@@ -317,13 +317,14 @@ async function _loadAdminUsers(){
     <thead><tr><th>Naam</th><th>Bedrijf</th><th>Rol</th><th>Status</th><th>Aangemeld</th><th>Actie</th></tr></thead>
     <tbody>${data.map(u => {
       const date = new Date(u.created_at).toLocaleDateString('nl-NL', { day:'numeric', month:'short', year:'numeric' });
-      const badge = u.blocked ? 'badge-blocked' : u.role === 'admin' ? 'badge-admin' : 'badge-user';
-      const badgeText = u.blocked ? 'Geblokkeerd' : u.role === 'admin' ? 'Admin' : 'Gebruiker';
+      const badge = u.blocked ? 'badge-blocked' : u.role === 'admin' ? 'badge-admin' : u.role === 'printer' ? 'badge-printer' : 'badge-user';
+      const badgeText = u.blocked ? 'Geblokkeerd' : u.role === 'admin' ? 'Admin' : u.role === 'printer' ? 'Printer' : 'Gebruiker';
       return `<tr>
         <td>${_esc(u.display_name || '—')}</td>
         <td>${_esc(u.company_name || '—')}</td>
         <td><select onchange="gsLoginUI.changeRole('${u.id}',this.value)" ${u.id === gsAuth.user?.id ? 'disabled' : ''}>
           <option value="user" ${u.role==='user'?'selected':''}>Gebruiker</option>
+          <option value="printer" ${u.role==='printer'?'selected':''}>Printer</option>
           <option value="admin" ${u.role==='admin'?'selected':''}>Admin</option>
         </select></td>
         <td><span class="badge ${badge}">${badgeText}</span></td>

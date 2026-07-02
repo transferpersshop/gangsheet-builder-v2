@@ -6748,6 +6748,8 @@ if(window.gsAuth){
         b.classList.toggle('active', b.dataset.lang === p.preferred_lang);
       });
     }
+    // Re-render format picker now that role is known (for role-gated formats like dtf32)
+    renderSheetFormatPicker();
   });
 }
 

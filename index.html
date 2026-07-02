@@ -249,7 +249,7 @@ window.addEventListener('load', ()=>{
   .te-color-wrap input[type=color]::-webkit-color-swatch{border:1px solid rgba(0,0,0,.12);border-radius:5px}
   .te-color-hex{font-size:.78rem;font-family:'SF Mono','Roboto Mono',monospace;color:var(--muted);letter-spacing:.5px}
   /* Preview */
-  .te-preview{min-height:50px;padding:20px;background:var(--bg);border:1px solid var(--border);border-radius:8px;text-align:center;overflow:visible}
+  .te-preview{min-height:40px;padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;text-align:center;overflow:visible}
   /* Toggle buttons */
   .te-tog-row{display:flex;gap:4px}
   .te-tog{width:34px;height:34px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:7px;background:var(--bg);cursor:pointer;font-size:.88rem;color:var(--fg);transition:all .15s;padding:0;font-family:'Inter',sans-serif}
@@ -262,31 +262,30 @@ window.addEventListener('load', ()=>{
   /* Used fonts tags */
   .te-used-tag{display:inline-block;background:var(--bg-light);border:1px solid var(--border);border-radius:6px;padding:2px 10px;font-size:.74rem;color:var(--fg);margin:2px 4px 2px 0}
   /* Tab bar */
-  .te-tab-bar{display:flex;gap:0;margin:0 0 20px;background:none;border-radius:0;padding:0;border:none;border-bottom:2px solid var(--border)}
-  .te-tab{flex:1;padding:14px 0;text-align:center;font-size:.95rem;font-weight:800;font-family:'Nunito',sans-serif;color:var(--muted);background:none;border:none;cursor:pointer;transition:all .18s;border-radius:0;display:flex;align-items:center;justify-content:center;gap:8px;border-bottom:3px solid transparent;margin-bottom:-2px;letter-spacing:.2px}
+  .te-tab-bar{display:flex;gap:0;margin:0 0 14px;background:none;border-radius:0;padding:0;border:none;border-bottom:2px solid var(--border)}
+  .te-tab{flex:1;padding:10px 0;text-align:center;font-size:.88rem;font-weight:700;font-family:'Nunito',sans-serif;color:var(--muted);background:none;border:none;cursor:pointer;transition:all .18s;border-radius:0;display:flex;align-items:center;justify-content:center;gap:6px;border-bottom:3px solid transparent;margin-bottom:-2px;letter-spacing:.2px}
   .te-tab:hover{color:var(--text)}
   .te-tab.te-tab-on{color:var(--primary);border-bottom-color:var(--primary)}
   .te-tab svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
   .te-pane{display:none}
   .te-pane.te-pane-on{display:block}
-  /* Jersey specific */
-  .j-section{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
-  .j-section-label{font-size:.78rem;font-weight:800;font-family:'Nunito',sans-serif;color:var(--text);margin:0 0 4px}
-  .j-section-hint{font-size:.7rem;color:var(--muted);margin:0 0 10px;line-height:1.4}
-  .j-defaults{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
-  .j-def-item{display:flex;flex-direction:column;gap:4px}
-  .j-def-item label{font-size:.7rem;color:var(--fg);margin:0;display:flex;align-items:center;gap:5px;font-weight:500;cursor:pointer}
-  .j-def-item label input[type=checkbox]{accent-color:var(--primary);width:14px;height:14px;cursor:pointer}
-  .j-def-item input[type=number]{width:100%;padding:6px 8px;font-size:.8rem;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--fg);text-align:center}
-  .j-def-item input[type=number]:disabled{opacity:.45;background:var(--bg-light)}
-  .j-toggle-row{display:flex;flex-direction:column;gap:8px}
-  .j-check-label{display:flex;align-items:center;gap:8px;font-size:.82rem;color:var(--text);cursor:pointer;user-select:none}
-  .j-check-label input[type=checkbox]{width:16px;height:16px;accent-color:var(--primary);cursor:pointer;flex-shrink:0}
+  /* Jersey specific — compact layout */
+  .j-section{background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+  .j-section-label{font-size:.72rem;font-weight:700;font-family:'Nunito',sans-serif;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin:0 0 8px}
+  .j-defaults{display:flex;gap:8px}
+  .j-def-item{flex:1;display:flex;flex-direction:column;gap:3px}
+  .j-def-item label{font-size:.68rem;color:var(--fg);margin:0;display:flex;align-items:center;gap:4px;font-weight:500;cursor:pointer;white-space:nowrap}
+  .j-def-item label input[type=checkbox]{accent-color:var(--primary);width:13px;height:13px;cursor:pointer}
+  .j-def-item input[type=number]{width:100%;padding:5px 6px;font-size:.78rem;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--fg);text-align:center}
+  .j-def-item input[type=number]:disabled{opacity:.4;background:var(--bg-light)}
+  .j-toggle-row{display:flex;gap:12px;flex-wrap:wrap}
+  .j-check-label{display:flex;align-items:center;gap:5px;font-size:.78rem;color:var(--text);cursor:pointer;user-select:none}
+  .j-check-label input[type=checkbox]{width:14px;height:14px;accent-color:var(--primary);cursor:pointer;flex-shrink:0}
   /* Two-column layout */
-  .te-layout{display:flex;gap:24px;align-items:flex-start}
+  .te-layout{display:flex;gap:18px;align-items:flex-start}
   .te-controls{flex:3;min-width:0}
-  .te-preview-col{flex:2;min-width:240px;position:sticky;top:0}
-  .te-preview-col .te-preview{min-height:120px}
+  .te-preview-col{flex:2;min-width:220px;position:sticky;top:0}
+  .te-preview-col .te-preview{min-height:100px}
   @media(max-width:700px){.te-layout{flex-direction:column}.te-preview-col{width:100%;position:static}}
   /* Jersey rows */
   #jRowsContainer{max-height:240px;overflow-y:auto;padding-right:4px;margin-bottom:4px}
@@ -296,7 +295,7 @@ window.addEventListener('load', ()=>{
   .j-row-del{width:26px;height:26px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:6px;background:none;cursor:pointer;color:var(--muted);transition:all .15s;flex-shrink:0;padding:0}
   .j-row-del:hover{border-color:#ef4444;color:#ef4444;background:rgba(239,68,68,.06)}
   .j-row-del svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
-  .j-add-row{width:100%;background:none;border:1px dashed var(--border);color:var(--muted);border-radius:8px;padding:8px;font-size:.78rem;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:10px}
+  .j-add-row{background:none;border:1px dashed var(--border);color:var(--muted);border-radius:8px;padding:6px 10px;font-size:.76rem;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:5px}
   .j-add-row:hover{border-color:var(--primary);color:var(--primary);background:var(--bg-light)}
   .j-add-row svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
 
@@ -588,6 +587,7 @@ window.addEventListener('load', ()=>{
   .admin-table select{padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:.8rem}
   .admin-table .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:.72rem;font-weight:700}
   .admin-table .badge-admin{background:#ede9fe;color:var(--secondary)}
+  .admin-table .badge-printer{background:#e0f2fe;color:#0369a1}
   .admin-table .badge-user{background:var(--bg-light);color:var(--muted)}
   .admin-table .badge-blocked{background:#fef2f2;color:var(--error)}
   .admin-table .btn-sm{padding:4px 10px;font-size:.75rem;border-radius:6px}
@@ -961,7 +961,7 @@ window.addEventListener('load', ()=>{
         <tr><td style="padding:3px 8px 3px 0;color:var(--muted)">0</td><td style="padding:3px 0" data-i18n="zoomFit">Passend</td></tr>
       </table>
     </div>
-    <p class="version-tag">v2.10.0 · 02-07-2026</p>
+    <p class="version-tag">v2.10.1 · 02-07-2026</p>
   </div>
 </div>
 
@@ -1103,60 +1103,53 @@ window.addEventListener('load', ()=>{
               </div>
               <button class="te-upload-btn" onclick="document.getElementById('teCustomFontInput').click()">
                 <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                Upload font
+                Upload eigen font
               </button>
             </div>
           </div>
           <input type="file" id="teCustomFontInput" accept=".ttf,.otf,.woff" style="display:none" onchange="gsbTextEditor.onCustomFontUpload()">
-          <div id="teFontStatus" style="font-size:.72rem;min-height:14px;margin:2px 0 6px"></div>
+          <div id="teFontStatus" style="font-size:.7rem;min-height:12px;margin:2px 0 4px"></div>
 
-          <!-- ── Styling toggles + spacing ── -->
-          <div class="te-row" style="margin-bottom:10px;align-items:center">
+          <!-- ── Styling + Color compact row ── -->
+          <div class="te-row" style="margin-bottom:8px;align-items:center">
             <div class="te-tog-row">
               <button class="te-tog" id="teBtnBold" onclick="gsbTextEditor.toggleBold()" title="Vet"><b>B</b></button>
               <button class="te-tog" id="teBtnItalic" onclick="gsbTextEditor.toggleItalic()" title="Cursief"><i>I</i></button>
               <button class="te-tog" id="teBtnUnderline" onclick="gsbTextEditor.toggleUnderline()" title="Onderstreept"><u>U</u></button>
               <button class="te-tog" id="teBtnCaps" onclick="gsbTextEditor.toggleAllCaps()" title="Hoofdletters">AA</button>
             </div>
-            <div style="flex:1;display:flex;align-items:center;gap:6px;min-width:0">
-              <label style="font-size:.68rem;color:var(--muted);white-space:nowrap;margin:0">Spacing</label>
-              <input type="range" id="teSpacing" min="-5" max="20" step="1" value="0" style="flex:1;accent-color:var(--primary)" oninput="gsbTextEditor.onSpacingChange()">
-              <span id="teSpacingVal" style="font-size:.72rem;font-weight:600;color:var(--fg);min-width:22px;text-align:center">0</span>
-            </div>
-          </div>
-
-          <!-- ── Color + Stroke row (shared) ── -->
-          <div class="te-row" style="margin-bottom:10px">
             <div class="te-field" style="flex:0 0 auto">
-              <label>Kleur</label>
-              <div class="te-color-wrap">
+              <div class="te-color-wrap" title="Tekstkleur">
                 <input type="color" id="teColor" value="#000000" oninput="gsbTextEditor.syncColor()">
                 <span class="te-color-hex" id="teColorHex">#000000</span>
               </div>
             </div>
             <div class="te-field" style="flex:0 0 auto">
-              <label>Stroke</label>
-              <div class="te-color-wrap">
+              <div class="te-color-wrap" title="Stroke kleur + dikte">
                 <input type="color" id="teStrokeColor" value="#FFFFFF" oninput="gsbTextEditor.syncStroke()">
-                <input type="number" id="teStrokeWidth" class="te-input" value="0" min="0" max="20" step="0.5" style="width:48px;padding:4px 6px;font-size:.78rem" oninput="gsbTextEditor.syncStroke()" title="Stroke dikte">
+                <input type="number" id="teStrokeWidth" class="te-input" value="0" min="0" max="20" step="0.5" style="width:42px;padding:4px 5px;font-size:.76rem" oninput="gsbTextEditor.syncStroke()" title="Stroke dikte (mm)">
               </div>
             </div>
             <div class="te-field" style="flex:0 0 auto">
-              <label>Gap</label>
-              <div class="te-color-wrap" style="padding:4px 6px">
-                <input type="number" id="teStrokeOffset" class="te-input" value="0" min="0" max="20" step="0.5" style="width:48px;padding:4px 6px;font-size:.78rem;border:none;text-align:center;background:transparent" oninput="gsbTextEditor.syncStroke()" title="Ruimte tussen tekst en stroke">
+              <div class="te-color-wrap" style="padding:4px 6px" title="Stroke gap (mm)">
+                <input type="number" id="teStrokeOffset" class="te-input" value="0" min="0" max="20" step="0.5" style="width:42px;padding:4px 5px;font-size:.76rem;border:none;text-align:center;background:transparent" oninput="gsbTextEditor.syncStroke()" title="Gap">
               </div>
             </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+            <label style="font-size:.68rem;color:var(--muted);white-space:nowrap;margin:0">Spacing</label>
+            <input type="range" id="teSpacing" min="-5" max="20" step="1" value="0" style="flex:1;accent-color:var(--primary)" oninput="gsbTextEditor.onSpacingChange()">
+            <span id="teSpacingVal" style="font-size:.72rem;font-weight:600;color:var(--fg);min-width:20px;text-align:center">0</span>
           </div>
 
           <!-- ══════ PANE: Tekst ══════ -->
           <div id="tePane_tekst" class="te-pane te-pane-on">
-            <div class="te-row" style="margin-bottom:10px">
+            <div class="te-row" style="margin-bottom:8px">
               <div class="te-field" style="flex:1">
-                <label>Hoogte</label>
+                <label>Letter hoogte</label>
                 <div style="display:flex;gap:6px">
                   <input type="number" id="teSizeMm" class="te-input" value="30" min="1" max="999" step="1" style="flex:1" oninput="gsbTextEditor.updatePreview()">
-                  <select id="teSizeUnit" class="te-input" style="width:68px">
+                  <select id="teSizeUnit" class="te-input" style="width:60px">
                     <option value="mm">mm</option>
                     <option value="cm">cm</option>
                   </select>
@@ -1164,17 +1157,17 @@ window.addEventListener('load', ()=>{
               </div>
             </div>
             <div class="te-field">
-              <label>Tekst <span style="font-weight:400;opacity:.65">(één naam per regel voor batch)</span></label>
-              <textarea id="teTextInput" class="te-input" rows="4" placeholder="Jan&#10;Piet&#10;Klaas" oninput="gsbTextEditor.updatePreview()"></textarea>
+              <label>Tekst <span style="font-weight:400;opacity:.65">(één per regel = batch)</span></label>
+              <textarea id="teTextInput" class="te-input" rows="3" placeholder="Jan&#10;Piet&#10;Klaas" oninput="gsbTextEditor.updatePreview()"></textarea>
             </div>
-            <div style="margin-top:6px">
+            <div style="margin-top:4px">
               <button class="te-small-btn" onclick="document.getElementById('teCsvInput').click()">
                 <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                Importeer namen uit CSV / Excel
+                Importeer CSV / Excel
               </button>
               <input type="file" id="teCsvInput" accept=".csv,.txt,.xlsx" style="display:none" onchange="gsbTextEditor.onCsvImport()">
             </div>
-            <button class="btn btn-grad-fill" style="width:100%;margin-top:14px;padding:12px 16px;font-size:.92rem;border-radius:10px" onclick="gsbTextEditor.addTexts()">
+            <button class="btn btn-grad-fill" style="width:100%;margin-top:10px;padding:10px 16px;font-size:.88rem;border-radius:10px" onclick="gsbTextEditor.addTexts()">
               Tekst toevoegen aan vel
             </button>
           </div>
@@ -1182,56 +1175,55 @@ window.addEventListener('load', ()=>{
           <!-- ══════ PANE: Rugnummers ══════ -->
           <div id="tePane_rugnummers" class="te-pane">
             <div class="j-section">
-              <div class="j-section-label">Afmetingen (mm)</div>
-              <div class="j-section-hint">Standaard KNVB maten. Vink uit om handmatig aan te passen.</div>
+              <div class="j-section-label">Afmetingen (mm) — KNVB standaard</div>
               <div class="j-defaults">
                 <div class="j-def-item">
-                  <label><input type="checkbox" id="jDef_nameH" checked onchange="gsbTextEditor.jToggleDefault('nameH')"> Naam hoogte</label>
+                  <label><input type="checkbox" id="jDef_nameH" checked onchange="gsbTextEditor.jToggleDefault('nameH')"> Naam</label>
                   <input type="number" id="jVal_nameH" value="50" min="1" max="200" step="1" disabled oninput="gsbTextEditor.jPreview()">
                 </div>
                 <div class="j-def-item">
-                  <label><input type="checkbox" id="jDef_numH" checked onchange="gsbTextEditor.jToggleDefault('numH')"> Nummer hoogte</label>
+                  <label><input type="checkbox" id="jDef_numH" checked onchange="gsbTextEditor.jToggleDefault('numH')"> Nummer</label>
                   <input type="number" id="jVal_numH" value="230" min="1" max="400" step="1" disabled oninput="gsbTextEditor.jPreview()">
                 </div>
                 <div class="j-def-item">
-                  <label><input type="checkbox" id="jDef_gap" checked onchange="gsbTextEditor.jToggleDefault('gap')"> Tussenafstand</label>
+                  <label><input type="checkbox" id="jDef_gap" checked onchange="gsbTextEditor.jToggleDefault('gap')"> Afstand</label>
                   <input type="number" id="jVal_gap" value="50" min="0" max="100" step="1" disabled oninput="gsbTextEditor.jPreview()">
                 </div>
               </div>
-            </div>
-            <div class="j-section">
-              <div class="j-section-label">Opties</div>
-              <div class="j-section-hint">Pas het uiterlijk van naam en nummer aan.</div>
-              <div class="j-toggle-row">
+              <div class="j-toggle-row" style="margin-top:10px">
                 <label class="j-check-label">
                   <input type="checkbox" id="jChkCurved" onchange="gsbTextEditor.jToggleCurved()">
-                  <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;flex-shrink:0"><path d="M4 16c0-6 4-12 8-12s8 6 8 12"/></svg>
                   Gebogen naam
                 </label>
                 <label class="j-check-label">
                   <input type="checkbox" id="jChkStrokeName" checked onchange="gsbTextEditor.jToggleStrokeName()">
-                  Stroke op naam
+                  Stroke naam
                 </label>
                 <label class="j-check-label">
                   <input type="checkbox" id="jChkStrokeNum" checked onchange="gsbTextEditor.jToggleStrokeNum()">
-                  Stroke op nummer
+                  Stroke nummer
                 </label>
               </div>
             </div>
 
             <!-- Row-based player input -->
-            <div class="te-field" style="margin-bottom:6px">
-              <label>Spelers <span style="font-weight:400;opacity:.65">(naam + rugnummer)</span></label>
+            <div class="te-field" style="margin-bottom:4px">
+              <label>Spelers</label>
             </div>
             <div id="jRowsContainer">
               <!-- Dynamically rendered by JS -->
             </div>
-            <button class="j-add-row" onclick="gsbTextEditor.jAddRow()">
-              <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              Speler toevoegen
-            </button>
-
-            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:2px">
+            <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
+              <button class="j-add-row" onclick="gsbTextEditor.jAddRow()" style="flex:1">
+                <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Speler toevoegen
+              </button>
+              <button class="te-small-btn" onclick="gsbTextEditor.jAutoNumber()" style="padding:6px 10px" title="Doornummeren">
+                <svg viewBox="0 0 24 24"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><text x="3" y="7" style="font-size:7px;fill:currentColor;font-weight:700">1</text><text x="3" y="13" style="font-size:7px;fill:currentColor;font-weight:700">2</text><text x="3" y="19" style="font-size:7px;fill:currentColor;font-weight:700">3</text></svg>
+                #
+              </button>
+            </div>
+            <div style="display:flex;gap:6px;margin-bottom:4px">
               <button class="te-small-btn" onclick="document.getElementById('jCsvInput').click()" style="flex:1">
                 <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                 Importeer Excel
@@ -1239,14 +1231,10 @@ window.addEventListener('load', ()=>{
               <input type="file" id="jCsvInput" accept=".xlsx,.xls,.csv,.txt" style="display:none" onchange="gsbTextEditor.jImportExcel()">
               <button class="te-small-btn" onclick="gsbTextEditor.jDownloadTemplate()" style="flex:1">
                 <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                Download template
-              </button>
-              <button class="te-small-btn" onclick="gsbTextEditor.jAutoNumber()" style="flex:1">
-                <svg viewBox="0 0 24 24"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><text x="3" y="7" style="font-size:7px;fill:currentColor;font-weight:700">1</text><text x="3" y="13" style="font-size:7px;fill:currentColor;font-weight:700">2</text><text x="3" y="19" style="font-size:7px;fill:currentColor;font-weight:700">3</text></svg>
-                Doornummeren
+                Template
               </button>
             </div>
-            <button class="btn btn-grad-fill" style="width:100%;margin-top:14px;padding:12px 16px;font-size:.92rem;border-radius:10px" onclick="gsbTextEditor.addJerseys()">
+            <button class="btn btn-grad-fill" style="width:100%;margin-top:8px;padding:10px 16px;font-size:.88rem;border-radius:10px" onclick="gsbTextEditor.addJerseys()">
               Rugnummers toevoegen aan vel
             </button>
           </div>
@@ -1271,8 +1259,8 @@ window.addEventListener('load', ()=>{
               </div>
             </div>
           </div>
-          <div class="te-field" style="margin-top:14px">
-            <label>Gebruikte lettertypes in deze opdracht</label>
+          <div class="te-field" style="margin-top:10px">
+            <label>Fonts in opdracht</label>
             <div id="teUsedFonts" style="min-height:20px">
               <span style="color:#9ca3af;font-size:.78rem">Nog geen teksten op het vel</span>
             </div>

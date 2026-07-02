@@ -387,30 +387,24 @@ function _renderGlyphs(font, text, baseline, fontSize, extraSp){
   return { d:allD, bb:{ x1:isFinite(mnX)?mnX:0, y1:isFinite(mnY)?mnY:0, x2:isFinite(mxX)?mxX:x, y2:isFinite(mxY)?mxY:fontSize } };
 }
 
-/* ══════════ Stroke helper with transparent gap ══════════ */
-/* Uses SVG <mask> for truly transparent gap between text and stroke.
-   Layer 1: stroke ring masked to exclude the gap+interior zone
-   Layer 2: clean fill on top
-   Result: text fill → transparent gap → stroke ring */
-var _maskCounter = 0;
+/* ══════════ 3-layer stroke helper ══════════ */
+/* Layer 1: full stroke ring in strokeColor (extends sw+offset outward)
+   Layer 2: white gap ring (covers inner offset zone with white — correct for DTF white film)
+   Layer 3: fill on top
+   Result: fill → white gap → stroke ring */
 function _strokeSvg(dAttr, fillColor, strokeColor, sw, offset, transforms, simBoldAttr){
   var out = '';
-  var totalSW = (sw + offset) * 2;
-
   if(offset > 0){
-    // Transparent gap via SVG mask
-    var mid = 'gm' + (++_maskCounter);
-    out += '<defs><mask id="'+mid+'" maskUnits="userSpaceOnUse" x="-5000" y="-5000" width="10000" height="10000">';
-    out += '<rect x="-5000" y="-5000" width="10000" height="10000" fill="white"/>';
-    out += '<path d="'+dAttr+'" fill="black" stroke="black" stroke-width="'+_r(offset*2)+'" stroke-linejoin="round" transform="'+transforms+'"/>';
-    out += '</mask></defs>';
-    // Stroke ring — masked to hide interior + gap zone
-    out += '<path d="'+dAttr+'" fill="none" stroke="'+strokeColor+'" stroke-width="'+_r(totalSW)+'" stroke-linejoin="round" transform="'+transforms+'" mask="url(#'+mid+')"/>';
+    var totalSW = (sw + offset) * 2;
+    // Layer 1: full stroke ring
+    out += '<path d="'+dAttr+'" fill="none" stroke="'+strokeColor+'" stroke-width="'+_r(totalSW)+'" stroke-linejoin="round" stroke-linecap="round" transform="'+transforms+'"/>';
+    // Layer 2: white gap ring (covers inner offset area)
+    out += '<path d="'+dAttr+'" fill="none" stroke="white" stroke-width="'+_r(offset*2)+'" stroke-linejoin="round" stroke-linecap="round" transform="'+transforms+'"/>';
   } else {
     // No gap — simple stroke ring
-    out += '<path d="'+dAttr+'" fill="none" stroke="'+strokeColor+'" stroke-width="'+_r(sw*2)+'" stroke-linejoin="round" transform="'+transforms+'"/>';
+    out += '<path d="'+dAttr+'" fill="none" stroke="'+strokeColor+'" stroke-width="'+_r(sw*2)+'" stroke-linejoin="round" stroke-linecap="round" transform="'+transforms+'"/>';
   }
-  // Fill on top
+  // Layer 3: fill on top
   out += '<path d="'+dAttr+'" fill="'+fillColor+'"'+(simBoldAttr||'')+' stroke="none" transform="'+transforms+'"/>';
   return out;
 }
@@ -475,7 +469,7 @@ function _textToSvg(text, font, heightMm, color, opts){
 
   if(hasStroke){
     // Expand viewBox for outward stroke + offset + safety margin
-    var expand = opts.strokeWidth + strokeOffset + 4;
+    var expand = opts.strokeWidth + strokeOffset + 8;
     tx += expand; ty += expand;
     w += expand * 2; h += expand * 2;
     transforms = 'translate('+_r(tx)+','+_r(ty)+')';
@@ -579,7 +573,7 @@ function _refreshPreview(){
     // For preview: keep viewBox at text size, use overflow:visible for stroke
     // This prevents the preview from shrinking when stroke gets bigger
     if(hasStroke){
-      var expand = _strokeWidth + _strokeOffset + 4;
+      var expand = _strokeWidth + _strokeOffset + 8;
       tx += expand; ty += expand;
       // Add expand to viewBox but only enough for padding, not full stroke
       vw += expand*2; vh += expand*2;
@@ -594,7 +588,6 @@ function _refreshPreview(){
     }
     el.style.cssText = bgStyle ? bgStyle : '';
 
-    _maskCounter = 0; // reset mask IDs for preview
     var svgH = '<svg viewBox="0 0 '+_r(vw)+' '+_r(vh)+'" style="max-width:100%;max-height:180px;display:block;margin:0 auto;overflow:visible" xmlns="http://www.w3.org/2000/svg">';
     if(hasStroke){
       svgH += _strokeSvg(dAttr, color, _strokeColor, _strokeWidth, _strokeOffset, transforms, '');
@@ -636,7 +629,6 @@ async function addTexts(){
 
   var lines = raw.split('\n').map(function(l){ return l.trim(); }).filter(Boolean);
   if(!lines.length) return;
-  _maskCounter = 0; // reset mask IDs for canvas SVGs
   var added = 0;
   lines.forEach(function(line){
     var result = _textToSvg(line, font, sizeMm, color, {
@@ -971,7 +963,7 @@ function _curvedTextSvg(text, font, heightMm, color, arcWidthMm, opts){
   }
 
   if(!svgParts) return null;
-  var expand = cHasStroke ? opts.strokeWidth+cOffset+4 : 2;
+  var expand = cHasStroke ? opts.strokeWidth+cOffset+8 : 2;
   minX -= expand; minY -= expand; maxX += expand; maxY += expand;
   var vw = maxX - minX;
   var vh = maxY - minY;
@@ -994,8 +986,6 @@ function _jRefreshPreview(){
 
   var ci = document.getElementById('teColor');
   var color = ci?ci.value:'#000000';
-  _maskCounter = 0; // reset mask IDs for this preview render
-
   var nameH = parseFloat(document.getElementById('jVal_nameH')?.value)||30;
   var numH = parseFloat(document.getElementById('jVal_numH')?.value)||80;
   var gap = parseFloat(document.getElementById('jVal_gap')?.value)||5;
@@ -1025,19 +1015,24 @@ function _jRefreshPreview(){
     var svgW = numResult.w + (JD.strokeNum?strokeExpand*2:0) + 10;
     if(nameResult) svgW = Math.max(svgW, nameResult.w + (JD.strokeName?strokeExpand*2:0) + 10);
 
+    // Pre-compute curved text so we know final svgW before positioning
+    var curved = null;
+    if(JD.curved){
+      curved = _curvedTextSvg(name, font, pNameH, color, numResult.w, {
+        spacing:_spacing, hasStroke:JD.strokeName, strokeColor:_strokeColor, strokeWidth:_strokeWidth*previewScale, strokeOffset:_strokeOffset*previewScale,
+      });
+      if(curved) svgW = Math.max(svgW, curved.w + 10);
+    }
+
     var svgContent = '';
     var yOffset = 4;
 
     // Render name (curved or straight)
     if(JD.curved){
-      var curved = _curvedTextSvg(name, font, pNameH, color, numResult.w, {
-        spacing:_spacing, hasStroke:JD.strokeName, strokeColor:_strokeColor, strokeWidth:_strokeWidth*previewScale, strokeOffset:_strokeOffset*previewScale,
-      });
       if(curved){
         var nameX = (svgW - curved.w)/2;
         svgContent += '<g transform="translate('+_r(nameX)+','+_r(yOffset)+')">' + curved.svg + '</g>';
         yOffset += curved.h + pGap;
-        svgW = Math.max(svgW, curved.w + 10);
       }
     } else {
       if(nameResult){
@@ -1122,7 +1117,6 @@ async function addJerseys(){
   if(!font) font=_currentFont;
   var simBold=_needsSimBold(), simItalic=_needsSimItalic();
 
-  _maskCounter = 0; // reset mask IDs for canvas SVGs
   var added = 0;
   for(var i=0;i<players.length;i++){
     var name = (players[i].name||'').toUpperCase();
