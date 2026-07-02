@@ -1,6 +1,6 @@
 /* ================================================================
    text-editor.js — Tekst-naar-SVG creator voor Gang Sheet Builder
-   v2.9.0 — wider layout, 3-layer stroke, row-based jersey input
+   v2.10.0 — transparent gap mask, curved spacing, XLSX, checkbox options
    ================================================================ */
 (function(){
 'use strict';
@@ -387,22 +387,30 @@ function _renderGlyphs(font, text, baseline, fontSize, extraSp){
   return { d:allD, bb:{ x1:isFinite(mnX)?mnX:0, y1:isFinite(mnY)?mnY:0, x2:isFinite(mxX)?mxX:x, y2:isFinite(mxY)?mxY:fontSize } };
 }
 
-/* ══════════ 3-layer stroke helper ══════════ */
-/* Explicit layering without paint-order:
-   Layer 1 (bottom): stroke ring — fill=none, visible outside + inside
-   Layer 2 (middle): gap mask — fill=none, stroke in fillColor (covers inner offset area)
-   Layer 3 (top):    clean fill — covers everything inside the glyph outline
-   Result: text → gap(offset in fillColor) → outline(sw in strokeColor) */
+/* ══════════ Stroke helper with transparent gap ══════════ */
+/* Uses SVG <mask> for truly transparent gap between text and stroke.
+   Layer 1: stroke ring masked to exclude the gap+interior zone
+   Layer 2: clean fill on top
+   Result: text fill → transparent gap → stroke ring */
+var _maskCounter = 0;
 function _strokeSvg(dAttr, fillColor, strokeColor, sw, offset, transforms, simBoldAttr){
   var out = '';
   var totalSW = (sw + offset) * 2;
-  // Layer 1: stroke ring (extends sw+offset outside AND inside from glyph outline)
-  out += '<path d="'+dAttr+'" fill="none" stroke="'+strokeColor+'" stroke-width="'+_r(totalSW)+'" stroke-linejoin="round" transform="'+transforms+'"/>';
-  // Layer 2: gap mask — covers inner 'offset' portion of stroke with fill color
+
   if(offset > 0){
-    out += '<path d="'+dAttr+'" fill="none" stroke="'+fillColor+'" stroke-width="'+_r(offset*2)+'" stroke-linejoin="round" transform="'+transforms+'"/>';
+    // Transparent gap via SVG mask
+    var mid = 'gm' + (++_maskCounter);
+    out += '<defs><mask id="'+mid+'" maskUnits="userSpaceOnUse" x="-5000" y="-5000" width="10000" height="10000">';
+    out += '<rect x="-5000" y="-5000" width="10000" height="10000" fill="white"/>';
+    out += '<path d="'+dAttr+'" fill="black" stroke="black" stroke-width="'+_r(offset*2)+'" stroke-linejoin="round" transform="'+transforms+'"/>';
+    out += '</mask></defs>';
+    // Stroke ring — masked to hide interior + gap zone
+    out += '<path d="'+dAttr+'" fill="none" stroke="'+strokeColor+'" stroke-width="'+_r(totalSW)+'" stroke-linejoin="round" transform="'+transforms+'" mask="url(#'+mid+')"/>';
+  } else {
+    // No gap — simple stroke ring
+    out += '<path d="'+dAttr+'" fill="none" stroke="'+strokeColor+'" stroke-width="'+_r(sw*2)+'" stroke-linejoin="round" transform="'+transforms+'"/>';
   }
-  // Layer 3: clean fill on top — covers everything inside the glyph outline
+  // Fill on top
   out += '<path d="'+dAttr+'" fill="'+fillColor+'"'+(simBoldAttr||'')+' stroke="none" transform="'+transforms+'"/>';
   return out;
 }
@@ -568,10 +576,13 @@ function _refreshPreview(){
     var simBold = _bold && !_loadedFonts[_currentName+'__700_'+(_italic?'italic':'normal')];
     var hasStroke = _strokeColor&&_strokeColor!=='none'&&_strokeWidth>0;
 
-    // Expand viewBox for stroke
+    // For preview: keep viewBox at text size, use overflow:visible for stroke
+    // This prevents the preview from shrinking when stroke gets bigger
     if(hasStroke){
       var expand = _strokeWidth + _strokeOffset + 4;
-      tx += expand; ty += expand; vw += expand*2; vh += expand*2;
+      tx += expand; ty += expand;
+      // Add expand to viewBox but only enough for padding, not full stroke
+      vw += expand*2; vh += expand*2;
       transforms = 'translate('+_r(tx)+','+_r(ty)+')';
       if(simItalic) transforms += ' skewX(-12)';
     }
@@ -583,9 +594,9 @@ function _refreshPreview(){
     }
     el.style.cssText = bgStyle ? bgStyle : '';
 
-    var svgH = '<svg viewBox="0 0 '+_r(vw)+' '+_r(vh)+'" style="max-width:100%;max-height:180px;display:block;margin:0 auto" xmlns="http://www.w3.org/2000/svg">';
+    _maskCounter = 0; // reset mask IDs for preview
+    var svgH = '<svg viewBox="0 0 '+_r(vw)+' '+_r(vh)+'" style="max-width:100%;max-height:180px;display:block;margin:0 auto;overflow:visible" xmlns="http://www.w3.org/2000/svg">';
     if(hasStroke){
-      // 3-layer stroke
       svgH += _strokeSvg(dAttr, color, _strokeColor, _strokeWidth, _strokeOffset, transforms, '');
     } else {
       var simBoldA = simBold ? ' stroke="'+color+'" stroke-width="'+(fontSize*0.022).toFixed(1)+'" stroke-linejoin="round"' : '';
@@ -625,6 +636,7 @@ async function addTexts(){
 
   var lines = raw.split('\n').map(function(l){ return l.trim(); }).filter(Boolean);
   if(!lines.length) return;
+  _maskCounter = 0; // reset mask IDs for canvas SVGs
   var added = 0;
   lines.forEach(function(line){
     var result = _textToSvg(line, font, sizeMm, color, {
@@ -708,23 +720,20 @@ function jToggleDefault(field){
 }
 
 function jToggleCurved(){
-  JD.curved = !JD.curved;
-  var btn = document.getElementById('jBtnCurved');
-  if(btn) btn.classList.toggle('te-tog-on', JD.curved);
+  var chk = document.getElementById('jChkCurved');
+  JD.curved = chk ? chk.checked : !JD.curved;
   _jRefreshPreview();
 }
 
 function jToggleStrokeName(){
-  JD.strokeName = !JD.strokeName;
-  var btn = document.getElementById('jBtnStrokeName');
-  if(btn) btn.classList.toggle('te-tog-on', JD.strokeName);
+  var chk = document.getElementById('jChkStrokeName');
+  JD.strokeName = chk ? chk.checked : !JD.strokeName;
   _jRefreshPreview();
 }
 
 function jToggleStrokeNum(){
-  JD.strokeNum = !JD.strokeNum;
-  var btn = document.getElementById('jBtnStrokeNum');
-  if(btn) btn.classList.toggle('te-tog-on', JD.strokeNum);
+  var chk = document.getElementById('jChkStrokeNum');
+  JD.strokeNum = chk ? chk.checked : !JD.strokeNum;
   _jRefreshPreview();
 }
 
@@ -802,42 +811,88 @@ function jAutoNumber(){
   _jRefreshPreview();
 }
 
-/* ── Excel template download ── */
+/* ── Excel template download (XLSX) ── */
 function jDownloadTemplate(){
-  var csv = 'NAAM,RUGNUMMER\nJansen,1\nDe Vries,2\nBakker,3\n';
-  var blob = new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8'});
-  var url = URL.createObjectURL(blob);
-  var a = document.createElement('a');
-  a.href = url; a.download = 'rugnummers-template.csv'; a.click();
-  URL.revokeObjectURL(url);
+  if(typeof XLSX !== 'undefined'){
+    var data = [['NAAM','RUGNUMMER'],['Jansen','1'],['De Vries','2'],['Bakker','3']];
+    var ws = XLSX.utils.aoa_to_sheet(data);
+    ws['!cols'] = [{wch:20},{wch:14}];
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Rugnummers');
+    XLSX.writeFile(wb, 'rugnummers-template.xlsx');
+  } else {
+    // Fallback to CSV if SheetJS not loaded
+    var csv = 'NAAM,RUGNUMMER\nJansen,1\nDe Vries,2\nBakker,3\n';
+    var blob = new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8'});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = 'rugnummers-template.csv'; a.click();
+    URL.revokeObjectURL(url);
+  }
 }
 
 /* ── Excel/CSV import for jersey ── */
 function jImportExcel(){
   var inp = document.getElementById('jCsvInput');
   if(!inp||!inp.files||!inp.files[0]) return;
-  var reader = new FileReader();
-  reader.onload = function(ev){
-    var lines = ev.target.result.split(/[\r\n]+/).map(function(l){return l.trim();}).filter(Boolean);
-    var start = 0;
-    if(lines.length && /naam|name|rugnummer|number/i.test(lines[0])) start = 1;
-    var newRows = [];
-    for(var i=start;i<lines.length;i++){
-      var parts = lines[i].split(/[,;\t]/);
-      if(parts.length >= 2){
-        newRows.push({name:parts[0].trim(), num:parts[1].trim()});
-      } else if(parts.length === 1){
-        newRows.push({name:parts[0].trim(), num:''});
+  var file = inp.files[0];
+  var isExcel = /\.xlsx?$/i.test(file.name);
+
+  if(isExcel && typeof XLSX !== 'undefined'){
+    // Parse XLSX with SheetJS
+    var reader = new FileReader();
+    reader.onload = function(ev){
+      try{
+        var wb = XLSX.read(ev.target.result, {type:'array'});
+        var ws = wb.Sheets[wb.SheetNames[0]];
+        var rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+        var start = 0;
+        if(rows.length && /naam|name|rugnummer|number/i.test(String(rows[0][0]||'')+String(rows[0][1]||''))) start = 1;
+        var newRows = [];
+        for(var i=start;i<rows.length;i++){
+          var r = rows[i];
+          if(!r || (!String(r[0]||'').trim() && !String(r[1]||'').trim())) continue;
+          newRows.push({name:String(r[0]||'').trim(), num:String(r[1]||'').trim()});
+        }
+        if(newRows.length){
+          _jerseyRows = newRows;
+          _jRenderRows();
+          if(window.toast) window.toast(newRows.length+' spelers geïmporteerd','success');
+          _jRefreshPreview();
+        } else {
+          if(window.toast) window.toast('Geen spelers gevonden in bestand','warn');
+        }
+      }catch(e){
+        console.error('[TE] XLSX parse error:', e);
+        if(window.toast) window.toast('Fout bij lezen Excel bestand','error');
       }
-    }
-    if(newRows.length){
-      _jerseyRows = newRows;
-      _jRenderRows();
-      if(window.toast) window.toast(newRows.length+' spelers geïmporteerd','success');
-      _jRefreshPreview();
-    }
-  };
-  reader.readAsText(inp.files[0]);
+    };
+    reader.readAsArrayBuffer(file);
+  } else {
+    // CSV/TXT fallback
+    var reader2 = new FileReader();
+    reader2.onload = function(ev){
+      var lines = ev.target.result.split(/[\r\n]+/).map(function(l){return l.trim();}).filter(Boolean);
+      var start = 0;
+      if(lines.length && /naam|name|rugnummer|number/i.test(lines[0])) start = 1;
+      var newRows = [];
+      for(var i=start;i<lines.length;i++){
+        var parts = lines[i].split(/[,;\t]/);
+        if(parts.length >= 2){
+          newRows.push({name:parts[0].trim(), num:parts[1].trim()});
+        } else if(parts.length === 1){
+          newRows.push({name:parts[0].trim(), num:''});
+        }
+      }
+      if(newRows.length){
+        _jerseyRows = newRows;
+        _jRenderRows();
+        if(window.toast) window.toast(newRows.length+' spelers geïmporteerd','success');
+        _jRefreshPreview();
+      }
+    };
+    reader2.readAsText(file);
+  }
   inp.value = '';
 }
 
@@ -939,10 +994,15 @@ function _jRefreshPreview(){
 
   var ci = document.getElementById('teColor');
   var color = ci?ci.value:'#000000';
+  _maskCounter = 0; // reset mask IDs for this preview render
 
   var nameH = parseFloat(document.getElementById('jVal_nameH')?.value)||30;
   var numH = parseFloat(document.getElementById('jVal_numH')?.value)||80;
   var gap = parseFloat(document.getElementById('jVal_gap')?.value)||5;
+
+  // When curved: the arc rises above baseline, reducing visual gap to number.
+  // Auto-increase gap to compensate for arc rise (~60% of nameH).
+  if(JD.curved) gap += nameH * 0.6;
 
   try{
     var font = _currentFont;
@@ -1015,7 +1075,7 @@ function _jRefreshPreview(){
     if(_isLightColor(color)) el.style.cssText = 'background:#1a1a1a;border-radius:6px;padding:4px';
     else el.style.cssText = '';
 
-    el.innerHTML = '<svg viewBox="0 0 '+_r(svgW)+' '+_r(yOffset)+'" style="max-width:100%;max-height:280px;display:block;margin:0 auto" xmlns="http://www.w3.org/2000/svg">'+svgContent+'</svg>';
+    el.innerHTML = '<svg viewBox="0 0 '+_r(svgW)+' '+_r(yOffset)+'" style="max-width:100%;max-height:280px;display:block;margin:0 auto;overflow:visible" xmlns="http://www.w3.org/2000/svg">'+svgContent+'</svg>';
   }catch(e){
     el.innerHTML = '<span style="color:#ef4444;font-size:.82rem">Preview fout: '+_esc(e.message||'')+'</span>';
   }
@@ -1054,11 +1114,15 @@ async function addJerseys(){
   var numH = parseFloat(document.getElementById('jVal_numH')?.value)||80;
   var gap = parseFloat(document.getElementById('jVal_gap')?.value)||5;
 
+  // When curved: auto-increase gap to compensate for arc rise
+  if(JD.curved) gap += nameH * 0.6;
+
   var font;
   try{font=await _getStyledFont();}catch(_){font=_currentFont;}
   if(!font) font=_currentFont;
   var simBold=_needsSimBold(), simItalic=_needsSimItalic();
 
+  _maskCounter = 0; // reset mask IDs for canvas SVGs
   var added = 0;
   for(var i=0;i<players.length;i++){
     var name = (players[i].name||'').toUpperCase();

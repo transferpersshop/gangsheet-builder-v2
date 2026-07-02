@@ -327,6 +327,7 @@ function t(key, ...args){
 // Sheet format definitions
 const SHEET_FORMATS = {
   dtf55: { label: 'DTF 55 cm', w: 550, h: 1000, isDTF: true },
+  dtf32: { label: 'DTF 32 cm', w: 320, h: 1000, isDTF: true, roles: ['admin','printer'] },
   a3:    { label: 'A3', w: 297, h: 420, isDTF: false },
   a4:    { label: 'A4', w: 210, h: 297, isDTF: false },
   a5:    { label: 'A5', w: 148, h: 210, isDTF: false },
@@ -958,6 +959,11 @@ function renderSheetFormatPicker(){
   // Format buttons 2×2 grid with dimensions
   Object.keys(SHEET_FORMATS).forEach(key=>{
     const fmt = SHEET_FORMATS[key];
+    // Role-gated formats: only show to users with matching role
+    if(fmt.roles){
+      const userRole = window.gsAuth?.profile?.role || 'user';
+      if(!fmt.roles.includes(userRole)) return;
+    }
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'format-btn' + (state.sheetFormat === key ? ' active' : '');
