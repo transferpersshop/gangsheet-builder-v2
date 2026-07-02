@@ -1208,7 +1208,29 @@ function _convertEpsClient(arrayBuf){
 }
 
 function handleFiles(files){
-  [...files].forEach(file=>{
+  const fileArr = [...files];
+  // Enable bulk mode for large uploads (>10 files)
+  if(fileArr.length > 10){
+    _bulkMode = true;
+    _bulkCount = 0;
+    showLogoLoading(`0 / ${fileArr.length} bestanden laden…`);
+    let loaded = 0;
+    const origHide = window._origHideLogoLoading || hideLogoLoading;
+    if(!window._origHideLogoLoading) window._origHideLogoLoading = hideLogoLoading;
+    // Override hideLogoLoading temporarily to track progress
+    window.hideLogoLoading = hideLogoLoading = function(){
+      loaded++;
+      if(loaded < fileArr.length){
+        showLogoLoading(`${loaded} / ${fileArr.length} bestanden laden…`);
+      } else {
+        window.hideLogoLoading = hideLogoLoading = origHide;
+        origHide();
+        _finishBulk();
+        toast(`${loaded} bestanden toegevoegd`, 'success');
+      }
+    };
+  }
+  fileArr.forEach(file=>{
     const type = file.type;
     const ext = file.name.split('.').pop().toLowerCase();
     if(type==='image/svg+xml' || ext==='svg'){
@@ -1957,10 +1979,11 @@ function autoCropSvg(svgText, callback){
   img.src = url;
 }
 
+/* ── Bulk mode: defers expensive per-item operations during large uploads ── */
+let _bulkMode = false;
+let _bulkCount = 0;
+
 function placeImage(obj, name, mmW, mmH, naturalW, naturalH){
-  // Never auto-rotate on upload — the user expects to see their logo
-  // in its natural orientation. Auto-rotation only happens in batch
-  // operations (changeGroupCount, repackAll, tileSheet).
   const spot = ensureSpotOnAnySheet(mmW, mmH);
   if(!spot) return;
   const id = ++idCounter;
@@ -1971,7 +1994,6 @@ function placeImage(obj, name, mmW, mmH, naturalW, naturalH){
   obj._naturalH = naturalH;
   obj._mmW = mmW;
   obj._mmH = mmH;
-  // Store SVG source in shared store (dedup for undo snapshots + clones)
   if(obj._svgSource) svgSourceStore.set(id, obj._svgSource);
   obj._mmLeft = spot.x;
   obj._mmTop  = spot.y;
@@ -1983,14 +2005,34 @@ function placeImage(obj, name, mmW, mmH, naturalW, naturalH){
   attachObjListeners(obj);
   canvas.add(obj);
   registerLogo(obj);
-  canvas.setActiveObject(obj);
-  canvas.requestRenderAll();
   autoExtendIfNeeded();
+  if(_bulkMode){
+    // In bulk mode: skip per-item render, undo push, item list, summary
+    _bulkCount++;
+    // Render canvas every 25 items to show progress
+    if(_bulkCount % 25 === 0){
+      canvas.requestRenderAll();
+      updateInfoBar();
+    }
+  } else {
+    canvas.setActiveObject(obj);
+    canvas.requestRenderAll();
+    renderItemList();
+    checkDpi(obj);
+    updateInfoBar();
+    updateSummary();
+    pushUndo();
+  }
+}
+
+function _finishBulk(){
+  _bulkMode = false;
+  canvas.requestRenderAll();
   renderItemList();
-  checkDpi(obj);
   updateInfoBar();
   updateSummary();
   pushUndo();
+  _bulkCount = 0;
 }
 
 /* Debounced UI rebuild — during drag/scale/rotate the mm values update
@@ -2325,7 +2367,7 @@ function ensureSpotOnAnySheet(mmW, mmH){
   // Only DTF rolls can auto-extend
   if(SHEET_FORMATS[state.sheetFormat]?.isDTF){
     let tries = 0;
-    while(!spot && state.sheet.h + 1000 <= MAX_LENGTH_MM && tries < 10){
+    while(!spot && state.sheet.h + 1000 <= MAX_LENGTH_MM && tries < 50){
       growRoll(1000);
       spot = findFreeSpotOrNull(mmW, mmH);
       tries++;

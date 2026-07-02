@@ -155,7 +155,7 @@ async function pickFont(el){
     if(lb){ lb.textContent = _currentName; lb.style.fontFamily = "'"+_currentName+"',sans-serif"; }
     _setStatus('','');
     _closePicker();
-    _refreshPreview();
+    _refreshAll();
     _renderFontList();
   } catch(e){
     console.error('[TE]',e);
@@ -268,28 +268,32 @@ function onCsvImport(){
 }
 
 /* ══════════ Styling toggles ══════════ */
+function _refreshAll(){
+  _refreshPreview();
+  _jRefreshPreview();
+}
 function toggleBold(){
   _bold = !_bold;
-  _syncToggleUI(); _refreshPreview();
+  _syncToggleUI(); _refreshAll();
 }
 function toggleItalic(){
   _italic = !_italic;
-  _syncToggleUI(); _refreshPreview();
+  _syncToggleUI(); _refreshAll();
 }
 function toggleUnderline(){
   _underline = !_underline;
-  _syncToggleUI(); _refreshPreview();
+  _syncToggleUI(); _refreshAll();
 }
 function toggleAllCaps(){
   _allCaps = !_allCaps;
-  _syncToggleUI(); _refreshPreview();
+  _syncToggleUI(); _refreshAll();
 }
 function onSpacingChange(){
   var sl = document.getElementById('teSpacing');
   var lbl = document.getElementById('teSpacingVal');
   _spacing = parseFloat(sl?sl.value:0)||0;
   if(lbl) lbl.textContent = _spacing > 0 ? '+'+_spacing : _spacing;
-  _refreshPreview();
+  _refreshAll();
 }
 function _syncToggleUI(){
   _tog('teBtnBold',_bold); _tog('teBtnItalic',_italic);
@@ -303,7 +307,7 @@ function syncColor(){
   var ci = document.getElementById('teColor');
   var ch = document.getElementById('teColorHex');
   if(ci&&ch) ch.textContent = ci.value.toUpperCase();
-  _refreshPreview();
+  _refreshAll();
 }
 function syncStroke(){
   var si = document.getElementById('teStrokeColor');
@@ -312,7 +316,7 @@ function syncStroke(){
   _strokeColor = si?si.value:'none';
   _strokeWidth = parseFloat(sw?sw.value:0)||0;
   _strokeOffset = parseFloat(so?so.value:0)||0;
-  _refreshPreview();
+  _refreshAll();
 }
 
 /* ══════════ Path data extraction (robust triple fallback) ══════════ */
@@ -771,7 +775,6 @@ function jImportExcel(){
 
 /* ── Curved text: render name along an arc ── */
 function _curvedTextSvg(text, font, heightMm, color, arcWidthMm, opts){
-  // Render each glyph along a circular arc
   text = text.toUpperCase();
   if(!text.trim()) return null;
   var upm = font.unitsPerEm||1000;
@@ -784,38 +787,40 @@ function _curvedTextSvg(text, font, heightMm, color, arcWidthMm, opts){
   try{ glyphs = font.stringToGlyphs(text); }catch(_){ return null; }
   if(!glyphs||!glyphs.length) return null;
 
-  // Calculate total text width
+  // Total text advance width
   var totalAdv = 0;
   for(var i=0;i<glyphs.length;i++){
     totalAdv += (glyphs[i].advanceWidth||0)*scale;
     if(i<glyphs.length-1) try{ totalAdv += font.getKerningValue(glyphs[i],glyphs[i+1])*scale; }catch(_){}
   }
-  totalAdv += (opts.spacing||0) * fontSize / 100 * (glyphs.length-1);
+  var extraSp = (opts.spacing||0) * fontSize / 100;
+  totalAdv += extraSp * (glyphs.length-1);
 
-  // Arc parameters: chord = arcWidthMm (or text width * 1.2 if wider)
-  var chord = Math.max(arcWidthMm||totalAdv*1.3, totalAdv*1.1);
-  // Radius to create a gentle arc — larger = flatter
-  var arcAngle = Math.min(totalAdv / chord * 2.5, Math.PI * 0.6); // max ~108 degrees
+  // Arc: gentle curve — chord matches target width, radius gives subtle bend
+  var chord = Math.max(arcWidthMm||totalAdv*1.4, totalAdv*1.05);
+  // Fixed arc angle of ~40° for gentle curve (like real jersey prints)
+  var arcAngle = 0.7; // radians, ~40 degrees
   var radius = chord / (2 * Math.sin(arcAngle/2));
-  if(radius < chord * 0.6) radius = chord * 0.6;
 
-  // Place each glyph along the arc
-  var cx = chord/2;
-  var cy = radius + heightMm;
+  // Arc coordinate system: center at bottom, text arcs upward
+  // cx,cy = center of the circle (below the arc)
+  var margin = heightMm * 0.3;
+  var arcRise = radius - radius * Math.cos(arcAngle/2); // how far the arc rises above chord
+  var cx = chord/2 + margin;
+  var cy = margin + arcRise + heightMm + radius; // circle center far below
   var startAngle = -Math.PI/2 - arcAngle/2;
-  var currentArc = 0;
   var totalArcLen = radius * arcAngle;
-  // Center text on arc
-  var arcOffset = (totalArcLen - totalAdv) / 2;
-  currentArc = arcOffset;
+  var arcOff = (totalArcLen - totalAdv) / 2; // center text on arc
+  var curArc = arcOff;
 
   var svgParts = '';
-  var extraSp = (opts.spacing||0) * fontSize / 100;
+  // Track bounds for viewBox
+  var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 
   for(var gi=0;gi<glyphs.length;gi++){
     var g = glyphs[gi];
     var adv = (g.advanceWidth||0)*scale;
-    var angle = startAngle + (currentArc + adv/2) / radius;
+    var angle = startAngle + (curArc + adv/2) / radius;
     var gx = cx + radius * Math.cos(angle);
     var gy = cy + radius * Math.sin(angle);
     var rotDeg = (angle + Math.PI/2) * 180/Math.PI;
@@ -838,19 +843,24 @@ function _curvedTextSvg(text, font, heightMm, color, arcWidthMm, opts){
         } else {
           svgParts += '<path d="'+d+'" fill="'+color+'" transform="'+gTransform+'"/>';
         }
+        // Approximate bounds (glyph center ± height)
+        minX = Math.min(minX, gx - heightMm); maxX = Math.max(maxX, gx + heightMm);
+        minY = Math.min(minY, gy - heightMm*1.2); maxY = Math.max(maxY, gy + heightMm*0.3);
       }
     }catch(_){}
 
-    currentArc += adv + extraSp;
-    if(gi<glyphs.length-1) try{ currentArc += font.getKerningValue(g,glyphs[gi+1])*scale; }catch(_){}
+    curArc += adv + extraSp;
+    if(gi<glyphs.length-1) try{ curArc += font.getKerningValue(g,glyphs[gi+1])*scale; }catch(_){}
   }
 
   if(!svgParts) return null;
-  var svgH = cy - radius + heightMm*0.2;
   var expand = (opts.hasStroke && opts.strokeWidth>0) ? opts.strokeWidth+(opts.strokeOffset||0) : 0;
-  var vw = chord + expand*2;
-  var vh = svgH + expand*2;
-  return { svg:svgParts, w:vw, h:vh, offsetX:expand, offsetY:expand, chord:chord };
+  minX -= expand + 2; minY -= expand + 2; maxX += expand + 2; maxY += expand + 2;
+  var vw = maxX - minX;
+  var vh = maxY - minY;
+  // Shift all content so viewBox starts at 0,0
+  var shifted = '<g transform="translate('+_r(-minX)+','+_r(-minY)+')">' + svgParts + '</g>';
+  return { svg:shifted, w:vw, h:vh, offsetX:0, offsetY:0, chord:chord };
 }
 
 /* ── Jersey preview ── */
