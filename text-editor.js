@@ -1,19 +1,19 @@
 /* ================================================================
    text-editor.js — Tekst-naar-SVG creator voor Gang Sheet Builder
-   v2.10.0 — transparent gap mask, curved spacing, XLSX, checkbox options
+   v2.12.0 — curated fonts, preview fix, outline label, no gap option
    ================================================================ */
 (function(){
 'use strict';
 
 /* ── Font database ── */
 var FONTS = [
-  {n:'Roboto',id:'roboto'},{n:'Open Sans',id:'open-sans'},{n:'Montserrat',id:'montserrat'},
-  {n:'Lato',id:'lato'},{n:'Poppins',id:'poppins'},{n:'Raleway',id:'raleway'},
-  {n:'Inter',id:'inter'},{n:'Nunito',id:'nunito'},{n:'Barlow',id:'barlow'},
+  // ── Sans-serif (geschikt voor transfers) ──
+  {n:'Montserrat',id:'montserrat'},{n:'Poppins',id:'poppins'},{n:'Raleway',id:'raleway'},
+  {n:'Nunito',id:'nunito'},{n:'Barlow',id:'barlow'},
   {n:'Barlow Condensed',id:'barlow-condensed'},{n:'Oswald',id:'oswald'},
-  {n:'Work Sans',id:'work-sans'},{n:'DM Sans',id:'dm-sans'},{n:'Quicksand',id:'quicksand'},
-  {n:'Rubik',id:'rubik'},{n:'Fira Sans',id:'fira-sans'},{n:'Manrope',id:'manrope'},
-  {n:'Source Sans 3',id:'source-sans-3'},
+  {n:'Quicksand',id:'quicksand'},{n:'Rubik',id:'rubik'},
+  {n:'Lato',id:'lato'},
+  // ── Display / Bold ──
   {n:'Bebas Neue',id:'bebas-neue'},{n:'Anton',id:'anton'},{n:'Archivo Black',id:'archivo-black'},
   {n:'Russo One',id:'russo-one'},{n:'Teko',id:'teko'},{n:'Black Ops One',id:'black-ops-one'},
   {n:'Bungee',id:'bungee'},{n:'Orbitron',id:'orbitron'},{n:'Righteous',id:'righteous'},
@@ -22,14 +22,16 @@ var FONTS = [
   {n:'Fugaz One',id:'fugaz-one'},{n:'Abril Fatface',id:'abril-fatface'},
   {n:'Staatliches',id:'staatliches'},{n:'Ultra',id:'ultra'},
   {n:'Bowlby One SC',id:'bowlby-one-sc'},{n:'Bungee Shade',id:'bungee-shade'},
+  // ── Serif ──
   {n:'Playfair Display',id:'playfair-display'},{n:'Merriweather',id:'merriweather'},
   {n:'Lora',id:'lora'},{n:'PT Serif',id:'pt-serif'},{n:'EB Garamond',id:'eb-garamond'},
   {n:'Libre Baskerville',id:'libre-baskerville'},{n:'Crimson Text',id:'crimson-text'},
+  // ── Script / Handschrift ──
   {n:'Dancing Script',id:'dancing-script'},{n:'Pacifico',id:'pacifico'},
   {n:'Lobster',id:'lobster'},{n:'Great Vibes',id:'great-vibes'},
   {n:'Sacramento',id:'sacramento'},{n:'Satisfy',id:'satisfy'},{n:'Caveat',id:'caveat'},
   {n:'Indie Flower',id:'indie-flower'},{n:'Shadows Into Light',id:'shadows-into-light'},
-  {n:'Kalam',id:'kalam'},{n:'Roboto Mono',id:'roboto-mono'},{n:'Source Code Pro',id:'source-code-pro'},
+  {n:'Kalam',id:'kalam'},
   // ── Sport / Jersey ──
   {n:'Saira Stencil One',id:'saira-stencil-one'},{n:'Saira Condensed',id:'saira-condensed'},
   {n:'Saira Extra Condensed',id:'saira-extra-condensed'},{n:'Racing Sans One',id:'racing-sans-one'},
@@ -349,10 +351,9 @@ function syncColor(){
 function syncStroke(){
   var si = document.getElementById('teStrokeColor');
   var sw = document.getElementById('teStrokeWidth');
-  var so = document.getElementById('teStrokeOffset');
   _strokeColor = si?si.value:'none';
   _strokeWidth = parseFloat(sw?sw.value:0)||0;
-  _strokeOffset = parseFloat(so?so.value:0)||0;
+  _strokeOffset = 0;
   _refreshAll();
 }
 
@@ -619,7 +620,13 @@ function _refreshPreview(){
     }
     el.style.cssText = bgStyle ? bgStyle : '';
 
-    var svgH = '<svg viewBox="0 0 '+_r(vw)+' '+_r(vh)+'" style="max-width:100%;max-height:180px;display:block;margin:0 auto;overflow:visible" xmlns="http://www.w3.org/2000/svg">';
+    // Calculate display size: fit to container width, cap height at 180px
+    var containerW = el.clientWidth || el.parentElement?.clientWidth || 540;
+    var aspect = vw / vh;
+    var dispW = containerW;
+    var dispH = dispW / aspect;
+    if(dispH > 180){ dispH = 180; dispW = dispH * aspect; }
+    var svgH = '<svg viewBox="0 0 '+_r(vw)+' '+_r(vh)+'" width="'+_r(dispW)+'" height="'+_r(dispH)+'" style="display:block;margin:0 auto;overflow:visible" xmlns="http://www.w3.org/2000/svg">';
     if(hasStroke){
       svgH += _strokeSvg(dAttr, color, _strokeColor, _strokeWidth, _strokeOffset, transforms, '');
     } else {

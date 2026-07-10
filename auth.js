@@ -294,6 +294,40 @@ async function getUsageStats(days){
   return { counts, activeDays: dailyActive.size, totalEvents: (data || []).length, error };
 }
 
+/* ── Admin: per-company usage stats ── */
+async function getCompanyStats(){
+  if(!_isAdmin) return { data: [] };
+  const client = getClient();
+  // Fetch profiles for company names
+  const { data: profiles } = await client.from('profiles')
+    .select('id, display_name, company_name, created_at');
+  // Fetch usage logs (export_pdf = gangsheet created)
+  const { data: logs } = await client.from('usage_logs')
+    .select('user_id, action, created_at')
+    .in('action', ['export_pdf','save_project','login'])
+    .order('created_at', { ascending: false })
+    .limit(5000);
+  // Build per-company map
+  const userCompany = {};
+  (profiles || []).forEach(p => {
+    userCompany[p.id] = p.company_name || p.display_name || 'Onbekend';
+  });
+  const companies = {};
+  (logs || []).forEach(l => {
+    const name = userCompany[l.user_id] || 'Onbekend';
+    if(!companies[name]) companies[name] = { gangsheets: 0, logins: 0, lastActivity: null };
+    if(l.action === 'export_pdf') companies[name].gangsheets++;
+    if(l.action === 'login') companies[name].logins++;
+    if(!companies[name].lastActivity || l.created_at > companies[name].lastActivity)
+      companies[name].lastActivity = l.created_at;
+  });
+  // Convert to sorted array
+  const result = Object.entries(companies).map(([name, d]) => ({
+    company: name, gangsheets: d.gangsheets, logins: d.logins, lastActivity: d.lastActivity
+  })).sort((a, b) => b.gangsheets - a.gangsheets);
+  return { data: result };
+}
+
 /* ── Usage logging (fire-and-forget) ── */
 async function _logUsage(action, metadata){
   if(!_user) return;
@@ -425,7 +459,7 @@ window.gsAuth = {
   listAllProjects,
   adminCreateUser,
   getSettings, updateSetting,
-  getUsageStats,
+  getUsageStats, getCompanyStats,
   logUsage: _logUsage,
   onReady,
   get user(){ return _user; },

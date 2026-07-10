@@ -3372,6 +3372,7 @@ function renderSelectedPanel(){
   panel.innerHTML = `
     <!-- ── Quick actions ── -->
     <div class="toolbar" style="margin-bottom:14px">
+      ${obj.type === 'image' ? '<button class="tool-btn" data-act="edit-logo" style="background:linear-gradient(135deg,rgba(105,70,200,.08),rgba(29,154,175,.08));color:var(--primary);font-weight:700">Bewerken</button>' : ''}
       <button class="tool-btn" data-act="rot90">${t('tbRotate')}</button>
       <button class="tool-btn" data-act="dup">${t('tbDup')}</button>
       <button class="tool-btn" data-act="del" style="background:#fee2e2;color:#dc2626">${t('tbDel')}</button>
@@ -3970,6 +3971,7 @@ function actOnSelected(act){
 
   // Single-select actions
   switch(act){
+    case 'edit-logo': { if(window.gsbLogoEditor) window.gsbLogoEditor.open(obj); break; }
     case 'rot90': { const cur = Math.round(((obj.angle||0)%360+360)%360); obj.rotate(cur===0?90:0); canvas.requestRenderAll(); syncMmFromPx(obj); pushUndo(); break; }
     case 'dup':   duplicate(obj); break;
     case 'del':   removeObj(obj); break;
@@ -6786,4 +6788,9 @@ if(window.gsAuth){
 /* ── Expose functions for external scripts (text-editor.js etc.) ── */
 window.toast = toast;
 window.loadSvg = loadSvg;
+window._gsbCanvas = canvas;
+window.attachObjListeners = attachObjListeners;
+window.syncMmFromPx = syncMmFromPx;
+window.renderItemList = renderItemList;
+window.renderSelectedPanel = renderSelectedPanel;
 

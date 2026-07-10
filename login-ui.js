@@ -475,6 +475,8 @@ async function _loadAdminStats(){
   const container = document.getElementById('adminStatsContent');
   if(!container) return;
   container.innerHTML = '<p style="color:var(--muted)">Laden...</p>';
+
+  // Overall stats
   const stats = await gsAuth.getUsageStats(30);
   const counts = stats.counts || {};
   const cards = [
@@ -485,9 +487,30 @@ async function _loadAdminStats(){
     { label:'Projecten opgeslagen', val: counts.save_project || 0 },
     { label:'Registraties', val: counts.signup || 0 },
   ];
-  container.innerHTML = `<div class="stats-grid">${cards.map(c =>
+
+  // Per-company stats
+  const companyData = await gsAuth.getCompanyStats();
+  const companies = companyData.data || [];
+
+  let html = `<div class="stats-grid">${cards.map(c =>
     `<div class="stat-card"><div class="sc-val">${c.val}</div><div class="sc-label">${c.label}</div></div>`
   ).join('')}</div>`;
+
+  // Company table
+  html += `<div style="height:1px;background:var(--border);margin:18px 0 14px"></div>`;
+  html += `<h4 style="margin:0 0 10px;font-size:.82rem;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Per bedrijf</h4>`;
+  if(companies.length === 0){
+    html += `<p style="color:var(--muted);font-size:.85rem">Nog geen activiteit geregistreerd.</p>`;
+  } else {
+    html += `<table class="admin-table"><thead><tr><th>Bedrijf</th><th>Gangsheets</th><th>Logins</th><th>Laatste activiteit</th></tr></thead><tbody>`;
+    companies.forEach(c => {
+      const lastDate = c.lastActivity ? new Date(c.lastActivity).toLocaleDateString('nl-NL', { day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—';
+      html += `<tr><td>${_esc(c.company)}</td><td><strong>${c.gangsheets}</strong></td><td>${c.logins}</td><td>${lastDate}</td></tr>`;
+    });
+    html += `</tbody></table>`;
+  }
+
+  container.innerHTML = html;
 }
 
 /* ── HTML escape ── */
