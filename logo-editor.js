@@ -543,41 +543,39 @@ function apply(){
   var nw = _workCanvas.width, nh = _workCanvas.height;
 
   fabric.Image.fromURL(dataUrl, function(newImg){
-    // Compute correct scale — preserve visual size, adjusted for canvas size changes
-    // origCanvasW/H = pixel dimensions when we opened the editor
-    // nw/nh = pixel dimensions after editing (may differ due to outline padding / upscale)
-    var origVisualW = obj.width * Math.abs(obj.scaleX);
-    var origVisualH = obj.height * Math.abs(obj.scaleY);
-    var signX = obj.scaleX >= 0 ? 1 : -1;
-    var signY = obj.scaleY >= 0 ? 1 : -1;
-    // Scale: keep same px-per-unit ratio as original, so outline grows and upscale grows
-    var newScaleX = (_origCanvasW > 0) ? (origVisualW / _origCanvasW) * signX : obj.scaleX;
-    var newScaleY = (_origCanvasH > 0) ? (origVisualH / _origCanvasH) * signY : obj.scaleY;
+    // ── Compute mm dimensions ──
+    // Ratio of canvas size change (outline adds padding, upscale multiplies)
+    var ratioW = (_origCanvasW > 0) ? nw / _origCanvasW : 1;
+    var ratioH = (_origCanvasH > 0) ? nh / _origCanvasH : 1;
+    var newMmW = (obj._mmW || 50) * ratioW;
+    var newMmH = (obj._mmH || 50) * ratioH;
+
+    // ── Compute scale directly from mm → display pixels ──
+    // This is the authoritative formula — no guessing from obj.width/scaleX
+    var pxPerMm = window._displayPxPerMm || 5;
+    var flipX = !!(obj.flipX);
+    var flipY = !!(obj.flipY);
 
     newImg.set({
       left: obj.left, top: obj.top, angle: obj.angle,
-      flipX: obj.flipX, flipY: obj.flipY,
-      scaleX: newScaleX, scaleY: newScaleY,
+      flipX: flipX, flipY: flipY,
+      scaleX: (newMmW * pxPerMm) / nw,
+      scaleY: (newMmH * pxPerMm) / nh,
     });
+
     // Copy custom properties
     newImg._id = obj._id;
     newImg._originalId = obj._originalId;
     newImg._name = obj._name;
     newImg._naturalW = nw;
     newImg._naturalH = nh;
-
-    // Adjust mm dimensions based on canvas size change
-    var ratioW = (_origCanvasW > 0) ? nw / _origCanvasW : 1;
-    var ratioH = (_origCanvasH > 0) ? nh / _origCanvasH : 1;
-    newImg._mmW = (obj._mmW || 50) * ratioW;
-    newImg._mmH = (obj._mmH || 50) * ratioH;
+    newImg._mmW = newMmW;
+    newImg._mmH = newMmH;
     newImg._mmLeft = obj._mmLeft;
     newImg._mmTop = obj._mmTop;
 
-    // Preserve flags
+    // Preserve flags (but clear vector-specific flags — result is now raster)
     if(obj._vectorOrigin) newImg._vectorOrigin = obj._vectorOrigin;
-    if(obj._svgSource) newImg._svgSource = obj._svgSource;
-    if(obj._hasGradients) newImg._hasGradients = obj._hasGradients;
     if(obj._embeddedRasterW) newImg._embeddedRasterW = obj._embeddedRasterW;
     if(obj._embeddedRasterH) newImg._embeddedRasterH = obj._embeddedRasterH;
     if(obj._pdfPageW) newImg._pdfPageW = obj._pdfPageW;

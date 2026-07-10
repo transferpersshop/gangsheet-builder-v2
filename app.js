@@ -732,6 +732,7 @@ function resizeSheet(){
   const pxW = Math.round(sheetMmW * 3 * scale);
   const pxH = Math.round(sheetMmH * 3 * scale);
   displayPxPerMm = pxW / sheetMmW;
+  window._displayPxPerMm = displayPxPerMm;
   canvas.setWidth(pxW);
   canvas.setHeight(pxH);
   const shadow = document.getElementById('sheetShadow');
@@ -3370,9 +3371,15 @@ function renderSelectedPanel(){
   const thrVal = document.getElementById('bgThreshold')?.value || 240;
 
   panel.innerHTML = `
+    ${(obj.type === 'image' || obj.type === 'group') ? `
+    <!-- ── Logo bewerken (prominent) ── -->
+    <button data-act="edit-logo" style="width:100%;padding:10px 16px;margin-bottom:12px;border:none;border-radius:10px;background:var(--gradient);color:#fff;font-size:.88rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:filter .15s" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter=''">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      Logo bewerken
+    </button>` : ''}
+
     <!-- ── Quick actions ── -->
     <div class="toolbar" style="margin-bottom:14px">
-      ${(obj.type === 'image' || obj.type === 'group') ? '<button class="tool-btn" data-act="edit-logo" style="background:linear-gradient(135deg,rgba(105,70,200,.08),rgba(29,154,175,.08));color:var(--primary);font-weight:700">Bewerken</button>' : ''}
       <button class="tool-btn" data-act="rot90">${t('tbRotate')}</button>
       <button class="tool-btn" data-act="dup">${t('tbDup')}</button>
       <button class="tool-btn" data-act="del" style="background:#fee2e2;color:#dc2626">${t('tbDel')}</button>
@@ -3434,19 +3441,11 @@ function renderSelectedPanel(){
     <div class="panel-group">
       <div class="panel-group-title">${t('sectionAppearance')}</div>
 
+      ${isVector ? `
       <div class="panel-row-label">${t('colorsLabel')}</div>
       <div class="field" id="colorSection" style="margin-bottom:0"></div>
-
-      ${isRaster ? `
-      <div class="panel-row-label" style="margin-top:10px">${t('bgRemove')}</div>
-      <div class="field" style="margin-bottom:0">
-        <button class="btn btn-grad" id="bgRemoveBtn" style="width:100%;justify-content:center">${t('bgRemove')}</button>
-        <div style="margin-top:8px">
-          <label style="font-size:.78rem">${t('thresholdLabel')}: <span id="thrVal">${thrVal}</span></label>
-          <input type="range" class="slider" id="bgThreshold" min="180" max="255" value="${thrVal}">
-          <p class="dpi-hint" style="margin-top:4px">${t('thresholdHelp')}</p>
-        </div>
-      </div>` : ''}
+      ` : `<div class="field" id="colorSection" style="display:none"></div>
+      <p class="dpi-hint" style="margin:0">Gebruik "Logo bewerken" voor kleuren, outline, upscale en achtergrond verwijderen.</p>`}
     </div>
 
     <!-- ── INFO group ── -->
@@ -6789,6 +6788,7 @@ if(window.gsAuth){
 window.toast = toast;
 window.loadSvg = loadSvg;
 window._gsbCanvas = canvas;
+window._displayPxPerMm = displayPxPerMm;
 window.attachObjListeners = attachObjListeners;
 window.syncMmFromPx = syncMmFromPx;
 window.renderItemList = renderItemList;
