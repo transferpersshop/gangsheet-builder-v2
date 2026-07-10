@@ -1,6 +1,6 @@
 /* ================================================================
    logo-editor.js — Per-logo bewerkingsmodal voor Gang Sheet Builder
-   v2.15.0 — color swatches, trimmed apply, better BG removal
+   v2.15.1 — outline fix, BG erosion, vector sharpness, full-width preview
    ================================================================ */
 (function(){
 'use strict';
@@ -16,17 +16,11 @@ var _modified  = false;
 var _origCanvasW = 0;
 var _origCanvasH = 0;
 var _liveTimer = null;
-var _isRaster  = false;   // true = bitmap without vector origin
-
-// Outline state
-var _outColor  = '#FFFFFF';
-var _outWidth  = 0;
+var _isRaster  = false;
 
 // Color replace state
 var _pickMode   = false;
 var _pickedRGB  = null;
-var _replColor  = '#FF0000';
-var _colorTol   = 30;
 
 // Loupe
 var _loupeCanvas = null;
@@ -40,7 +34,6 @@ function open(fabricObj){
   _modified = false;
   _pickMode = false;
   _pickedRGB = null;
-  _outWidth = 0;
 
   var srcCanvas, nw, nh;
   if(fabricObj.type === 'image'){
@@ -52,23 +45,28 @@ function open(fabricObj){
     srcCanvas.width = nw; srcCanvas.height = nh;
     srcCanvas.getContext('2d').drawImage(imgEl, 0, 0);
   } else if(fabricObj.toCanvasElement){
-    var multiplier = 3;
-    srcCanvas = fabricObj.toCanvasElement(multiplier);
+    srcCanvas = fabricObj.toCanvasElement(3);
     nw = srcCanvas.width;
     nh = srcCanvas.height;
   } else { return; }
 
   if(!nw || !nh) return;
+
+  // Trim transparent edges from source (removes SVG viewBox margins)
+  var trimmed = _trimCanvas(srcCanvas);
+  nw = trimmed.width;
+  nh = trimmed.height;
+
   _origCanvasW = nw;
   _origCanvasH = nh;
 
   _origImg = new Image();
-  _origImg.src = srcCanvas.toDataURL('image/png');
+  _origImg.src = trimmed.toDataURL('image/png');
 
   _workCanvas = document.createElement('canvas');
   _workCanvas.width = nw; _workCanvas.height = nh;
   _workCtx = _workCanvas.getContext('2d');
-  _workCtx.drawImage(srcCanvas, 0, 0);
+  _workCtx.drawImage(trimmed, 0, 0);
 
   var m = document.getElementById('logoEditorModal');
   if(m) m.classList.add('open');
@@ -83,19 +81,15 @@ function open(fabricObj){
 
   _isRaster = (fabricObj.type === 'image') && !fabricObj._vectorOrigin;
 
-  // Show/hide bitmap-only tools
   var upBtn = document.getElementById('leToolUpscale');
   if(upBtn) upBtn.style.display = _isRaster ? '' : 'none';
   var bgBtn = document.getElementById('leToolBgRemove');
   if(bgBtn) bgBtn.style.display = _isRaster ? '' : 'none';
 
-  // Upscale info
   var info = document.getElementById('leUpInfo');
   if(info) info.textContent = nw + '×' + nh + ' px';
 
   _createLoupe();
-
-  // Extract colors for swatch display
   _extractColors();
 }
 
@@ -108,23 +102,45 @@ function close(){
   clearTimeout(_liveTimer);
 }
 
-/* ══════════ Preview rendering ══════════ */
+/* ══════════ Trim transparent edges ══════════ */
+function _trimCanvas(src){
+  var w = src.width, h = src.height;
+  var data = src.getContext('2d').getImageData(0, 0, w, h).data;
+  var top = h, left = w, bottom = 0, right = 0;
+  for(var y = 0; y < h; y++){
+    for(var x = 0; x < w; x++){
+      if(data[(y * w + x) * 4 + 3] > 0){
+        if(y < top) top = y;
+        if(y > bottom) bottom = y;
+        if(x < left) left = x;
+        if(x > right) right = x;
+      }
+    }
+  }
+  if(top > bottom || left > right) return src;
+  var tw = right - left + 1;
+  var th = bottom - top + 1;
+  // Only trim if there's meaningful transparent margin (>2px each side)
+  if(tw >= w - 4 && th >= h - 4) return src;
+  var out = document.createElement('canvas');
+  out.width = tw; out.height = th;
+  out.getContext('2d').drawImage(src, left, top, tw, th, 0, 0, tw, th);
+  return out;
+}
+
+/* ══════════ Preview — always full width, max height ══════════ */
 function _drawPreview(sourceCanvas){
   if(!_previewEl) return;
   var src = sourceCanvas || _workCanvas;
   if(!src) return;
   var wrap = _previewEl.parentElement;
-  var maxW = (wrap ? wrap.clientWidth : 500) - 32;
+  var maxW = (wrap ? wrap.clientWidth : 560) - 32;
   var maxH = 360;
-  var scale = Math.min(maxW / src.width, maxH / src.height, 1);
+  // Always fill width, constrain by max height
+  var scale = maxW / src.width;
+  if(src.height * scale > maxH) scale = maxH / src.height;
   var pw = Math.round(src.width * scale);
   var ph = Math.round(src.height * scale);
-  // Ensure minimum visible size
-  if(ph < 80 && src.height > 0){
-    scale = 80 / src.height;
-    pw = Math.round(src.width * scale);
-    ph = 80;
-  }
   _previewEl.width = pw;
   _previewEl.height = ph;
   var ctx = _previewEl.getContext('2d');
@@ -205,26 +221,21 @@ function _resetToolPanels(){
   if(ctv) ctv.textContent = '30';
 }
 
-/* ══════════ Extract dominant colors from logo ══════════ */
+/* ══════════ Extract dominant colors ══════════ */
 function _extractColors(){
   if(!_workCanvas) return;
   var container = document.getElementById('leColorSwatches');
   if(!container) return;
-
   var w = _workCanvas.width, h = _workCanvas.height;
-  // Sample at lower resolution for speed
-  var sampleW = Math.min(w, 200);
-  var sampleH = Math.min(h, 200);
+  var sampleW = Math.min(w, 200), sampleH = Math.min(h, 200);
   var tmpC = document.createElement('canvas');
   tmpC.width = sampleW; tmpC.height = sampleH;
   var tctx = tmpC.getContext('2d');
   tctx.drawImage(_workCanvas, 0, 0, sampleW, sampleH);
   var data = tctx.getImageData(0, 0, sampleW, sampleH).data;
-
-  // Bucket colors (quantize to 16 steps per channel)
   var buckets = {};
   for(var i = 0; i < data.length; i += 4){
-    if(data[i+3] < 30) continue; // skip transparent
+    if(data[i+3] < 30) continue;
     var r = Math.round(data[i] / 16) * 16;
     var g = Math.round(data[i+1] / 16) * 16;
     var b = Math.round(data[i+2] / 16) * 16;
@@ -232,11 +243,7 @@ function _extractColors(){
     var key = r + ',' + g + ',' + b;
     buckets[key] = (buckets[key] || 0) + 1;
   }
-
-  // Sort by frequency, take top colors
-  var sorted = Object.keys(buckets).sort(function(a,b){ return buckets[b] - buckets[a]; });
-
-  // Filter out very similar colors
+  var sorted = Object.keys(buckets).sort(function(a,b2){ return buckets[b2] - buckets[a]; });
   var unique = [];
   for(var j = 0; j < sorted.length && unique.length < 8; j++){
     var parts = sorted[j].split(',').map(Number);
@@ -247,8 +254,6 @@ function _extractColors(){
     }
     if(!tooClose) unique.push(parts);
   }
-
-  // Build swatch HTML
   var html = '';
   for(var u = 0; u < unique.length; u++){
     var c = unique[u];
@@ -256,15 +261,9 @@ function _extractColors(){
     html += '<button class="le-color-chip" data-r="'+c[0]+'" data-g="'+c[1]+'" data-b="'+c[2]+'" title="'+hex+'" style="background:'+hex+'"></button>';
   }
   container.innerHTML = html;
-
-  // Wire click: set as picked source color
   container.querySelectorAll('.le-color-chip').forEach(function(chip){
     chip.onclick = function(){
-      _pickedRGB = {
-        r: parseInt(chip.dataset.r, 10),
-        g: parseInt(chip.dataset.g, 10),
-        b: parseInt(chip.dataset.b, 10)
-      };
+      _pickedRGB = { r: parseInt(chip.dataset.r,10), g: parseInt(chip.dataset.g,10), b: parseInt(chip.dataset.b,10) };
       _updatePickedSwatch();
       _liveColor();
     };
@@ -274,7 +273,6 @@ function _extractColors(){
 /* ══════════ Event wiring ══════════ */
 function _wireEvents(){
   if(!_previewEl) return;
-
   _previewEl.onclick = function(e){
     if(_activeTool !== 'color' || !_pickMode) return;
     var rect = _previewEl.getBoundingClientRect();
@@ -284,39 +282,32 @@ function _wireEvents(){
     var py = Math.floor((e.clientY - rect.top) * scaleY);
     px = Math.max(0, Math.min(px, _workCanvas.width - 1));
     py = Math.max(0, Math.min(py, _workCanvas.height - 1));
-    var data = _workCtx.getImageData(px, py, 1, 1).data;
-    if(data[3] < 10) return;
-    _pickedRGB = {r: data[0], g: data[1], b: data[2]};
+    var d = _workCtx.getImageData(px, py, 1, 1).data;
+    if(d[3] < 10) return;
+    _pickedRGB = {r: d[0], g: d[1], b: d[2]};
     _pickMode = false;
     _previewEl.style.cursor = '';
     _updatePickedSwatch();
     _hideLoupe();
     _liveColor();
   };
-
   _previewEl.onmousemove = function(e){
     if(!_pickMode || _activeTool !== 'color') return;
     _showLoupe(e);
   };
+  _previewEl.onmouseleave = function(){ _hideLoupe(); };
 
-  _previewEl.onmouseleave = function(){
-    _hideLoupe();
-  };
-
-  // Wire live preview on outline controls
   var outW = document.getElementById('leOutWidth');
   var outC = document.getElementById('leOutColor');
   if(outW) outW.addEventListener('input', function(){ _livePreview(); });
   if(outC) outC.addEventListener('input', function(){ _livePreview(); });
-
-  // Wire live preview on color controls
   var replC = document.getElementById('leReplColor');
   var tolR = document.getElementById('leColorTol');
   if(replC) replC.addEventListener('input', function(){ _livePreview(); });
   if(tolR) tolR.addEventListener('input', function(){ _livePreview(); });
 }
 
-/* ══════════ Pixel-zoom loupe (pipet) ══════════ */
+/* ══════════ Loupe ══════════ */
 function _createLoupe(){
   _destroyLoupe();
   var el = document.createElement('canvas');
@@ -327,14 +318,10 @@ function _createLoupe(){
   _loupeCtx = el.getContext('2d');
   _loupeCtx.imageSmoothingEnabled = false;
 }
-
 function _destroyLoupe(){
-  if(_loupeCanvas && _loupeCanvas.parentNode){
-    _loupeCanvas.parentNode.removeChild(_loupeCanvas);
-  }
+  if(_loupeCanvas && _loupeCanvas.parentNode) _loupeCanvas.parentNode.removeChild(_loupeCanvas);
   _loupeCanvas = null; _loupeCtx = null;
 }
-
 function _showLoupe(e){
   if(!_loupeCanvas || !_workCanvas || !_previewEl) return;
   _loupeCanvas.style.display = 'block';
@@ -342,22 +329,18 @@ function _showLoupe(e){
   var mx = e.clientX, my = e.clientY;
   _loupeCanvas.style.left = (mx + 20) + 'px';
   _loupeCanvas.style.top = (my - 140) + 'px';
-  var scaleX = _workCanvas.width / _previewEl.width;
-  var scaleY = _workCanvas.height / _previewEl.height;
-  var srcX = Math.floor((mx - rect.left) * scaleX);
-  var srcY = Math.floor((my - rect.top) * scaleY);
-  var zoom = 10;
-  var sampleSize = 12;
-  var half = Math.floor(sampleSize / 2);
-  var sx = srcX - half, sy = srcY - half;
+  var scX = _workCanvas.width / _previewEl.width;
+  var scY = _workCanvas.height / _previewEl.height;
+  var srcX = Math.floor((mx - rect.left) * scX);
+  var srcY = Math.floor((my - rect.top) * scY);
+  var half = 6;
   _loupeCtx.clearRect(0, 0, 120, 120);
   _drawCheckerboard(_loupeCtx, 120, 120);
-  _loupeCtx.drawImage(_workCanvas, sx, sy, sampleSize, sampleSize, 0, 0, 120, 120);
-  _loupeCtx.strokeStyle = 'rgba(0,0,0,.6)';
-  _loupeCtx.lineWidth = 1;
-  _loupeCtx.strokeRect(55, 55, zoom, zoom);
+  _loupeCtx.drawImage(_workCanvas, srcX - half, srcY - half, 12, 12, 0, 0, 120, 120);
+  _loupeCtx.strokeStyle = 'rgba(0,0,0,.6)'; _loupeCtx.lineWidth = 1;
+  _loupeCtx.strokeRect(55, 55, 10, 10);
   _loupeCtx.strokeStyle = 'rgba(255,255,255,.8)';
-  _loupeCtx.strokeRect(54, 54, zoom + 2, zoom + 2);
+  _loupeCtx.strokeRect(54, 54, 12, 12);
   srcX = Math.max(0, Math.min(srcX, _workCanvas.width - 1));
   srcY = Math.max(0, Math.min(srcY, _workCanvas.height - 1));
   var px = _workCtx.getImageData(srcX, srcY, 1, 1).data;
@@ -371,10 +354,7 @@ function _showLoupe(e){
     _loupeCtx.fillText(hex.toUpperCase(), 60, 114);
   }
 }
-
-function _hideLoupe(){
-  if(_loupeCanvas) _loupeCanvas.style.display = 'none';
-}
+function _hideLoupe(){ if(_loupeCanvas) _loupeCanvas.style.display = 'none'; }
 
 function _updatePickedSwatch(){
   var sw = document.getElementById('lePickedSwatch');
@@ -382,8 +362,7 @@ function _updatePickedSwatch(){
   if(!sw || !txt) return;
   if(_pickedRGB){
     var hex = '#' + _hex(_pickedRGB.r) + _hex(_pickedRGB.g) + _hex(_pickedRGB.b);
-    sw.style.background = hex;
-    sw.style.borderColor = '#999';
+    sw.style.background = hex; sw.style.borderColor = '#999';
     txt.textContent = hex.toUpperCase();
   } else {
     sw.style.background = 'repeating-conic-gradient(#ddd 0% 25%,#fff 0% 50%) 50%/10px 10px';
@@ -391,7 +370,6 @@ function _updatePickedSwatch(){
     txt.textContent = 'Kies hieronder of gebruik pipet';
   }
 }
-
 function _hex(n){ return n.toString(16).padStart(2,'0'); }
 
 /* ══════════ Reset ══════════ */
@@ -400,38 +378,12 @@ function reset(){
   _workCanvas.width = _origImg.naturalWidth || _origImg.width;
   _workCanvas.height = _origImg.naturalHeight || _origImg.height;
   _workCtx.drawImage(_origImg, 0, 0);
-  _outWidth = 0;
   _pickedRGB = null;
   _modified = false;
   _resetToolPanels();
   _drawPreview(_workCanvas);
   _extractColors();
   if(window.toast) window.toast('Reset naar origineel', 'info', 1200);
-}
-
-/* ══════════ Trim transparent edges ══════════ */
-function _trimCanvas(src){
-  var w = src.width, h = src.height;
-  var ctx = src.getContext('2d');
-  var data = ctx.getImageData(0, 0, w, h).data;
-  var top = h, left = w, bottom = 0, right = 0;
-  for(var y = 0; y < h; y++){
-    for(var x = 0; x < w; x++){
-      if(data[(y * w + x) * 4 + 3] > 0){
-        if(y < top) top = y;
-        if(y > bottom) bottom = y;
-        if(x < left) left = x;
-        if(x > right) right = x;
-      }
-    }
-  }
-  if(top > bottom || left > right) return src; // fully transparent — return as-is
-  var tw = right - left + 1;
-  var th = bottom - top + 1;
-  var trimmed = document.createElement('canvas');
-  trimmed.width = tw; trimmed.height = th;
-  trimmed.getContext('2d').drawImage(src, left, top, tw, th, 0, 0, tw, th);
-  return trimmed;
 }
 
 /* ══════════════════════════════════════════
@@ -489,7 +441,6 @@ function onTolChange(){
   _livePreview();
 }
 
-/* ── Quick color: all non-transparent pixels to one color ── */
 function _makeAllColor(r, g, b, label){
   if(!_workCanvas) return;
   var w = _workCanvas.width, h = _workCanvas.height;
@@ -505,12 +456,11 @@ function _makeAllColor(r, g, b, label){
   _extractColors();
   if(window.toast) window.toast(label, 'success', 1200);
 }
-
 function makeAllBlack(){ _makeAllColor(0, 0, 0, 'Logo zwart gemaakt'); }
 function makeAllWhite(){ _makeAllColor(255, 255, 255, 'Logo wit gemaakt'); }
 
 /* ══════════════════════════════════════════
-   TOOL 2: ACHTERGROND VERWIJDEREN (bitmap only)
+   TOOL 2: ACHTERGROND VERWIJDEREN
    ══════════════════════════════════════════ */
 var _bgRemoveLib = null;
 
@@ -526,7 +476,7 @@ async function applyBgRemove(){
         var mod = await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/dist/index.mjs');
         _bgRemoveLib = mod.removeBackground || mod.default?.removeBackground;
       }catch(e1){
-        console.warn('[LE] @imgly/background-removal failed, using fallback', e1);
+        console.warn('[LE] @imgly/background-removal CDN failed, trying fallback', e1);
         _bgRemoveLib = null;
       }
     }
@@ -561,79 +511,108 @@ async function applyBgRemove(){
     if(window.toast) window.toast('Achtergrond verwijderd', 'success');
   }catch(err){
     console.error('[LE] BG remove error:', err);
-    if(status) status.textContent = 'Fout: ' + (err.message || 'onbekend');
+    if(status) status.textContent = 'Fout, fallback wordt gebruikt…';
     try{
       _fallbackBgRemove();
       _dtfPostProcess();
       _modified = true;
       _drawPreview(_workCanvas);
       if(status) status.textContent = 'Klaar (basis)';
-    }catch(_e){}
+    }catch(_e){
+      if(status) status.textContent = 'Fout: ' + (err.message || 'onbekend');
+    }
   }
   if(btn) btn.disabled = false;
 }
 
-/* DTF post-processing: hard alpha + shadow removal */
+/* DTF post-processing: hard alpha + edge erosion + shadow removal */
 function _dtfPostProcess(){
   var w = _workCanvas.width, h = _workCanvas.height;
   var data = _workCtx.getImageData(0, 0, w, h);
   var px = data.data;
 
-  // Pass 1: Hard alpha threshold
+  // Pass 1: Hard alpha threshold — no semi-transparency for DTF
   for(var i = 3; i < px.length; i += 4){
     px[i] = px[i] < 128 ? 0 : 255;
   }
 
-  // Pass 2: Remove shadow remnants near transparent edges
+  // Pass 2: Edge erosion — remove 1px fringe around transparency boundary
+  // This cleans up the white/gray edge artifacts from AI models
+  var alpha1 = new Uint8Array(w * h);
+  for(var j = 0; j < w * h; j++) alpha1[j] = px[j * 4 + 3];
+
   for(var y = 0; y < h; y++){
     for(var x = 0; x < w; x++){
-      var idx = (y * w + x) * 4;
-      if(px[idx + 3] === 0) continue;
-      var r = px[idx], g = px[idx+1], b = px[idx+2];
-      var maxC = Math.max(r, g, b);
-      var minC = Math.min(r, g, b);
-      var lum = (r + g + b) / 3;
-      var sat = maxC > 0 ? (maxC - minC) / maxC : 0;
-      if(lum > 180 && sat < 0.12){
-        var hasTransparentNeighbor = false;
-        for(var dy = -2; dy <= 2 && !hasTransparentNeighbor; dy++){
-          for(var dx = -2; dx <= 2; dx++){
-            var nx = x + dx, ny = y + dy;
-            if(nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
-            if(px[(ny * w + nx) * 4 + 3] === 0){ hasTransparentNeighbor = true; break; }
-          }
+      var pos = y * w + x;
+      if(alpha1[pos] === 0) continue;
+      // Check 4-connected neighbors for transparency
+      var hasEdge = false;
+      if(x === 0 || x === w-1 || y === 0 || y === h-1) hasEdge = true;
+      else {
+        if(alpha1[pos - 1] === 0 || alpha1[pos + 1] === 0 ||
+           alpha1[pos - w] === 0 || alpha1[pos + w] === 0) hasEdge = true;
+      }
+      if(hasEdge){
+        // Check if this edge pixel looks like fringe (light, low saturation)
+        var idx = pos * 4;
+        var r = px[idx], g = px[idx+1], b = px[idx+2];
+        var maxC = Math.max(r, g, b), minC = Math.min(r, g, b);
+        var lum = (r + g + b) / 3;
+        var sat = maxC > 0 ? (maxC - minC) / maxC : 0;
+        // Remove if it's a light low-saturation fringe pixel
+        if(lum > 160 && sat < 0.15){
+          px[idx + 3] = 0;
         }
-        if(hasTransparentNeighbor) px[idx + 3] = 0;
       }
     }
   }
 
-  // Pass 3: Fill isolated transparent holes inside subject
-  var alpha = new Uint8Array(w * h);
-  for(var j = 0; j < w * h; j++) alpha[j] = px[j * 4 + 3];
+  // Pass 3: Second erosion pass for stubborn 2px fringes
+  var alpha2 = new Uint8Array(w * h);
+  for(var j2 = 0; j2 < w * h; j2++) alpha2[j2] = px[j2 * 4 + 3];
+
   for(var y2 = 1; y2 < h - 1; y2++){
     for(var x2 = 1; x2 < w - 1; x2++){
-      var pos = y2 * w + x2;
-      if(alpha[pos] > 0) continue;
+      var pos2 = y2 * w + x2;
+      if(alpha2[pos2] === 0) continue;
+      if(alpha2[pos2-1]===0 || alpha2[pos2+1]===0 || alpha2[pos2-w]===0 || alpha2[pos2+w]===0){
+        var idx2 = pos2 * 4;
+        var r2 = px[idx2], g2 = px[idx2+1], b2 = px[idx2+2];
+        var lum2 = (r2 + g2 + b2) / 3;
+        var maxC2 = Math.max(r2, g2, b2), minC2 = Math.min(r2, g2, b2);
+        var sat2 = maxC2 > 0 ? (maxC2 - minC2) / maxC2 : 0;
+        if(lum2 > 200 && sat2 < 0.1){
+          px[idx2 + 3] = 0;
+        }
+      }
+    }
+  }
+
+  // Pass 4: Fill isolated transparent holes inside subject
+  var alpha3 = new Uint8Array(w * h);
+  for(var j3 = 0; j3 < w * h; j3++) alpha3[j3] = px[j3 * 4 + 3];
+
+  for(var y3 = 1; y3 < h - 1; y3++){
+    for(var x3 = 1; x3 < w - 1; x3++){
+      var pos3 = y3 * w + x3;
+      if(alpha3[pos3] > 0) continue;
       var opaqueCount = 0;
-      for(var dy2 = -1; dy2 <= 1; dy2++){
-        for(var dx2 = -1; dx2 <= 1; dx2++){
-          if(dy2 === 0 && dx2 === 0) continue;
-          if(alpha[(y2+dy2)*w + (x2+dx2)] > 0) opaqueCount++;
+      for(var dy3 = -1; dy3 <= 1; dy3++){
+        for(var dx3 = -1; dx3 <= 1; dx3++){
+          if(dy3 === 0 && dx3 === 0) continue;
+          if(alpha3[(y3+dy3)*w + (x3+dx3)] > 0) opaqueCount++;
         }
       }
       if(opaqueCount >= 6){
-        px[pos * 4 + 3] = 255;
-        var sr2 = 0, sg2 = 0, sb2 = 0, sc2 = 0;
-        for(var dy3 = -1; dy3 <= 1; dy3++){
-          for(var dx3 = -1; dx3 <= 1; dx3++){
-            var npos = (y2+dy3)*w + (x2+dx3);
-            if(alpha[npos] > 0){
-              sr2 += px[npos*4]; sg2 += px[npos*4+1]; sb2 += px[npos*4+2]; sc2++;
-            }
+        px[pos3 * 4 + 3] = 255;
+        var sr = 0, sg = 0, sb = 0, sc = 0;
+        for(var dy4 = -1; dy4 <= 1; dy4++){
+          for(var dx4 = -1; dx4 <= 1; dx4++){
+            var npos = (y3+dy4)*w + (x3+dx4);
+            if(alpha3[npos] > 0){ sr += px[npos*4]; sg += px[npos*4+1]; sb += px[npos*4+2]; sc++; }
           }
         }
-        if(sc2 > 0){ px[pos*4] = Math.round(sr2/sc2); px[pos*4+1] = Math.round(sg2/sc2); px[pos*4+2] = Math.round(sb2/sc2); }
+        if(sc > 0){ px[pos3*4] = Math.round(sr/sc); px[pos3*4+1] = Math.round(sg/sc); px[pos3*4+2] = Math.round(sb/sc); }
       }
     }
   }
@@ -641,21 +620,21 @@ function _dtfPostProcess(){
   _workCtx.putImageData(data, 0, 0);
 }
 
-/* Fallback: flood-fill from all edges with higher tolerance */
+/* Fallback: flood-fill from edges */
 function _fallbackBgRemove(){
   var w = _workCanvas.width, h = _workCanvas.height;
   var data = _workCtx.getImageData(0, 0, w, h);
   var px = data.data;
 
-  // Sample corners + edge midpoints + additional edge samples
-  var samples = [
-    {x:0,y:0},{x:w-1,y:0},{x:0,y:h-1},{x:w-1,y:h-1},
-    {x:Math.floor(w/2),y:0},{x:Math.floor(w/2),y:h-1},
-    {x:0,y:Math.floor(h/2)},{x:w-1,y:Math.floor(h/2)},
-    {x:Math.floor(w/4),y:0},{x:Math.floor(w*3/4),y:0},
-    {x:Math.floor(w/4),y:h-1},{x:Math.floor(w*3/4),y:h-1}
-  ];
-  var bgR=0,bgG=0,bgB=0,cnt=0;
+  // Sample edge pixels for background color
+  var samples = [];
+  for(var sx = 0; sx < w; sx += Math.max(1, Math.floor(w/20))){
+    samples.push({x:sx, y:0}); samples.push({x:sx, y:h-1});
+  }
+  for(var sy = 0; sy < h; sy += Math.max(1, Math.floor(h/20))){
+    samples.push({x:0, y:sy}); samples.push({x:w-1, y:sy});
+  }
+  var bgR=0, bgG=0, bgB=0, cnt=0;
   samples.forEach(function(c){
     var idx = (c.y*w + c.x)*4;
     if(px[idx+3] > 200){ bgR += px[idx]; bgG += px[idx+1]; bgB += px[idx+2]; cnt++; }
@@ -665,28 +644,26 @@ function _fallbackBgRemove(){
 
   var visited = new Uint8Array(w * h);
   var queue = [];
-  // Seed from ALL edge pixels
-  for(var x=0;x<w;x++){ queue.push(x); queue.push(x+(h-1)*w); }
-  for(var y=1;y<h-1;y++){ queue.push(y*w); queue.push(y*w+w-1); }
+  for(var ex = 0; ex < w; ex++){ queue.push(ex); queue.push(ex + (h-1)*w); }
+  for(var ey = 1; ey < h-1; ey++){ queue.push(ey*w); queue.push(ey*w + w-1); }
 
-  // Higher tolerance for better coverage
-  var tolerance = 55;
+  var tolerance = 60;
   var tolSq = tolerance * tolerance * 3;
 
   while(queue.length > 0){
     var pos = queue.pop();
-    if(pos<0 || pos>=w*h || visited[pos]) continue;
+    if(pos < 0 || pos >= w*h || visited[pos]) continue;
     visited[pos] = 1;
-    var idx = pos*4;
+    var idx = pos * 4;
     if(px[idx+3] < 10) continue;
-    var dr=px[idx]-bgR, dg=px[idx+1]-bgG, db=px[idx+2]-bgB;
-    if(dr*dr+dg*dg+db*db > tolSq) continue;
+    var dr = px[idx]-bgR, dg = px[idx+1]-bgG, db = px[idx+2]-bgB;
+    if(dr*dr + dg*dg + db*db > tolSq) continue;
     px[idx+3] = 0;
-    var cx=pos%w, cy=Math.floor(pos/w);
-    if(cx>0) queue.push(pos-1);
-    if(cx<w-1) queue.push(pos+1);
-    if(cy>0) queue.push(pos-w);
-    if(cy<h-1) queue.push(pos+w);
+    var cx = pos % w, cy = Math.floor(pos / w);
+    if(cx > 0) queue.push(pos-1);
+    if(cx < w-1) queue.push(pos+1);
+    if(cy > 0) queue.push(pos-w);
+    if(cy < h-1) queue.push(pos+w);
   }
 
   _workCtx.putImageData(data, 0, 0);
@@ -747,7 +724,7 @@ function previewOutline(){
 }
 
 /* ══════════════════════════════════════════
-   TOOL 4: UPSCALE (bitmap only)
+   TOOL 4: UPSCALE
    ══════════════════════════════════════════ */
 function applyUpscale(){
   var sel = document.getElementById('leUpFactor');
@@ -756,30 +733,25 @@ function applyUpscale(){
   var sharpVal = parseFloat(sharp ? sharp.value : 0.5) || 0.5;
   var ow = _workCanvas.width, oh = _workCanvas.height;
   var nw = ow * factor, nh = oh * factor;
-
   if(nw > 8000 || nh > 8000){
     if(window.toast) window.toast('Te groot — maximaal 8000px', 'error', 2000);
     return;
   }
-
   var tmpC = document.createElement('canvas');
   tmpC.width = nw; tmpC.height = nh;
   var tctx = tmpC.getContext('2d');
   tctx.imageSmoothingEnabled = true;
   tctx.imageSmoothingQuality = 'high';
   tctx.drawImage(_workCanvas, 0, 0, nw, nh);
-
   if(sharpVal > 0){
     var data = tctx.getImageData(0, 0, nw, nh);
     _unsharpMask(data, nw, nh, sharpVal);
     tctx.putImageData(data, 0, 0);
   }
-
   _workCanvas.width = nw; _workCanvas.height = nh;
   _workCtx.drawImage(tmpC, 0, 0);
   _modified = true;
   _drawPreview(_workCanvas);
-
   var info = document.getElementById('leUpInfo');
   if(info) info.textContent = ow + '×' + oh + ' → ' + nw + '×' + nh + ' px';
   if(window.toast) window.toast('Upscale ' + factor + 'x toegepast', 'success', 1500);
@@ -812,16 +784,14 @@ function onSharpChange(){
 }
 
 /* ══════════════════════════════════════════
-   APPLY / CANCEL — trims transparent edges
+   APPLY — no trim (outline padding preserved)
    ══════════════════════════════════════════ */
 function apply(){
   if(!_fabricObj || !_workCanvas || !_modified){ close(); return; }
 
-  // Trim transparent edges so no white border appears on canvas
-  var trimmed = _trimCanvas(_workCanvas);
-  var dataUrl = trimmed.toDataURL('image/png');
+  var dataUrl = _workCanvas.toDataURL('image/png');
   var obj = _fabricObj;
-  var nw = trimmed.width, nh = trimmed.height;
+  var nw = _workCanvas.width, nh = _workCanvas.height;
 
   fabric.Image.fromURL(dataUrl, function(newImg){
     var ratioW = (_origCanvasW > 0) ? nw / _origCanvasW : 1;
@@ -836,6 +806,8 @@ function apply(){
       scaleX: (newMmW * pxPerMm) / nw,
       scaleY: (newMmH * pxPerMm) / nh,
     });
+    // Disable caching so zoomed view stays sharp
+    newImg.objectCaching = false;
 
     newImg._id = obj._id;
     newImg._originalId = obj._originalId;
@@ -872,20 +844,12 @@ function apply(){
 
 /* ══════════ Expose ══════════ */
 window.gsbLogoEditor = {
-  open: open,
-  close: close,
-  apply: apply,
-  reset: reset,
+  open: open, close: close, apply: apply, reset: reset,
   selectTool: selectTool,
-  applyOutline: applyOutline,
-  previewOutline: previewOutline,
-  startPick: startPick,
-  applyColorReplace: applyColorReplace,
-  onTolChange: onTolChange,
-  makeAllBlack: makeAllBlack,
-  makeAllWhite: makeAllWhite,
-  applyUpscale: applyUpscale,
-  onSharpChange: onSharpChange,
+  applyOutline: applyOutline, previewOutline: previewOutline,
+  startPick: startPick, applyColorReplace: applyColorReplace, onTolChange: onTolChange,
+  makeAllBlack: makeAllBlack, makeAllWhite: makeAllWhite,
+  applyUpscale: applyUpscale, onSharpChange: onSharpChange,
   applyBgRemove: applyBgRemove,
 };
 
