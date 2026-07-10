@@ -1791,6 +1791,9 @@ function loadSvg(svgText, name){
 
     fabric.loadSVGFromString(croppedSvgText, (objects, options)=>{
       const group = fabric.util.groupSVGElements(objects, options);
+      // Disable object caching for vector quality at any zoom level
+      group.objectCaching = false;
+      if(group._objects) group._objects.forEach(child => { child.objectCaching = false; });
       const naturalW = group.width || options.width || 200;
       const naturalH = group.height || options.height || 200;
       // Set SVG properties
@@ -3373,17 +3376,10 @@ function renderSelectedPanel(){
   panel.innerHTML = `
     ${(obj.type === 'image' || obj.type === 'group') ? `
     <!-- ── Logo bewerken (prominent) ── -->
-    <button data-act="edit-logo" style="width:100%;padding:10px 16px;margin-bottom:12px;border:none;border-radius:10px;background:var(--gradient);color:#fff;font-size:.88rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:filter .15s" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter=''">
+    <button data-act="edit-logo" style="width:100%;padding:10px 16px;margin-bottom:12px;border:none;border-radius:10px;background:linear-gradient(135deg,#F97316,#EA580C);color:#fff;font-size:.88rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:filter .15s;box-shadow:0 2px 8px rgba(249,115,22,.25)" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter=''">
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
       Logo bewerken
     </button>` : ''}
-
-    <!-- ── Quick actions ── -->
-    <div class="toolbar" style="margin-bottom:14px">
-      <button class="tool-btn" data-act="rot90">${t('tbRotate')}</button>
-      <button class="tool-btn" data-act="dup">${t('tbDup')}</button>
-      <button class="tool-btn" data-act="del" style="background:#fee2e2;color:#dc2626">${t('tbDel')}</button>
-    </div>
 
     <!-- ── TRANSFORM group ── -->
     <div class="panel-group">
@@ -3406,6 +3402,7 @@ function renderSelectedPanel(){
         </div>
       </div>
 
+      ${state.manualMode ? `
       <div class="panel-row-label">${t('rotation')}</div>
       <div class="field" style="margin-bottom:0">
         <div class="rot-slider-head">
@@ -3419,7 +3416,7 @@ function renderSelectedPanel(){
           <button data-rot="180">180°</button>
           <button data-rot="270">270°</button>
         </div>
-      </div>
+      </div>` : ''}
     </div>
 
     <!-- ── ALIGN TO SHEET group ── -->
@@ -3437,16 +3434,7 @@ function renderSelectedPanel(){
       </div>
     </div>
 
-    <!-- ── APPEARANCE group ── -->
-    <div class="panel-group">
-      <div class="panel-group-title">${t('sectionAppearance')}</div>
-
-      ${isVector ? `
-      <div class="panel-row-label">${t('colorsLabel')}</div>
-      <div class="field" id="colorSection" style="margin-bottom:0"></div>
-      ` : `<div class="field" id="colorSection" style="display:none"></div>
-      <p class="dpi-hint" style="margin:0">Gebruik "Logo bewerken" voor kleuren, outline, upscale en achtergrond verwijderen.</p>`}
-    </div>
+    <div id="colorSection" style="display:none"></div>
 
     <!-- ── INFO group ── -->
     <div class="panel-group">
@@ -3505,10 +3493,11 @@ function renderSelectedPanel(){
   // Colors
   buildColorEditor(obj, isVector);
 
-  // Rotation slider — debounced like gap/threshold: live preview, delayed repack
+  // Rotation slider — only wired in manual mode
   const slider = document.getElementById('rotSlider');
   const valEl  = document.getElementById('rotVal');
   const chips  = panel.querySelectorAll('#rotChips button');
+  if(!slider || !valEl) return;
   let rotTimer = null;
   const markActiveChip = (a)=>{
     chips.forEach(b=>b.classList.toggle('active', parseInt(b.dataset.rot,10) === a));

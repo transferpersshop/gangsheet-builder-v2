@@ -935,7 +935,7 @@ window.addEventListener('load', ()=>{
         <tr><td style="padding:3px 8px 3px 0;color:var(--muted)">0</td><td style="padding:3px 0" data-i18n="zoomFit">Passend</td></tr>
       </table>
     </div>
-    <p class="version-tag">v2.13.1 · 10-07-2026</p>
+    <p class="version-tag">v2.14.1 · 11-07-2026</p>
   </div>
 </div>
 
@@ -1287,33 +1287,56 @@ window.addEventListener('load', ()=>{
             <span class="le-val" id="leColorTolVal">30</span>
           </div>
           <button class="le-btn le-btn-apply" onclick="gsbLogoEditor.applyColorReplace()" style="width:100%;margin-top:8px">Kleur vervangen</button>
+
+          <div style="border-top:1px solid var(--border);margin-top:14px;padding-top:12px">
+            <h4 style="margin:0 0 8px;font-size:.72rem;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:800">Snel omzetten</h4>
+            <div style="display:flex;gap:8px">
+              <button class="le-btn" onclick="gsbLogoEditor.makeAllBlack()" style="flex:1;background:#1a1a1a;color:#fff;font-size:.78rem;padding:8px 0;border-radius:8px">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px"><circle cx="12" cy="12" r="10"/></svg>
+                Maak zwart
+              </button>
+              <button class="le-btn" onclick="gsbLogoEditor.makeAllWhite()" style="flex:1;background:#fff;color:#1a1a1a;font-size:.78rem;padding:8px 0;border:1px solid #ddd;border-radius:8px">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px"><circle cx="12" cy="12" r="10"/></svg>
+                Maak wit
+              </button>
+            </div>
+          </div>
         </div>
 
         <!-- ═══ Upscale ═══ -->
         <div class="le-tool-panel" id="lePanel_upscale">
           <h4>Afbeelding opschalen</h4>
+          <div style="background:var(--bg);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:.74rem;color:var(--fg);line-height:1.45">
+            <strong style="color:var(--primary)">Waarom opschalen?</strong><br>
+            DTF-prints vereisen minimaal <strong>150 DPI</strong> (ideaal 300 DPI) voor scherpe randen en fijne details. Een klein logo (bijv. 400×400 px) wordt wazig bij grotere afdrukformaten. Opschalen vergroot de pixeldichtheid zodat lijnen, tekst en randen scherp blijven op de transferfilm.
+          </div>
           <div class="le-row">
             <label>Factor</label>
             <select id="leUpFactor">
-              <option value="2">2×</option>
-              <option value="3">3×</option>
-              <option value="4">4×</option>
+              <option value="2">2× — standaard, verdubbelt resolutie</option>
+              <option value="3">3× — kleine logo's naar printbaar</option>
+              <option value="4">4× — maximaal, voor erg kleine bestanden</option>
             </select>
-            <span class="le-info" id="leUpInfo" style="margin:0"></span>
+          </div>
+          <div class="le-row">
+            <span class="le-info" id="leUpInfo" style="margin:0;font-weight:700"></span>
           </div>
           <div class="le-row">
             <label>Verscherpen</label>
             <input type="range" id="leSharpAmount" min="0" max="3" step="0.1" value="0.5" oninput="gsbLogoEditor.onSharpChange()">
             <span class="le-val" id="leSharpVal">0.5</span>
           </div>
-          <p style="font-size:.72rem;color:var(--muted);margin:4px 0 0">Verhoogt de DPI voor scherpere DTF-prints. Alleen voor PNG/JPG.</p>
-          <button class="le-btn le-btn-apply" onclick="gsbLogoEditor.applyUpscale()" style="width:100%;margin-top:8px">Upscale toepassen</button>
+          <button class="le-btn le-btn-apply" onclick="gsbLogoEditor.applyUpscale()" style="width:100%;margin-top:8px">Opschalen</button>
         </div>
 
         <!-- ═══ BG Remove ═══ -->
         <div class="le-tool-panel" id="lePanel_bgremove">
           <h4>Achtergrond verwijderen</h4>
-          <p style="font-size:.78rem;color:var(--muted);margin:0 0 12px">AI-model verwijdert de achtergrond automatisch. Eerste keer laden duurt ±30 seconden.</p>
+          <div style="background:var(--bg);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:.74rem;color:var(--fg);line-height:1.45">
+            <strong style="color:var(--primary)">DTF-geoptimaliseerd</strong><br>
+            Speciaal afgestemd op DTF-transfers: keihard alpha-kanaal (100% transparant of 100% dekkend), geen zachte randen of schaduwen, en witte gebieden binnen letters/vormen blijven behouden. Het AI-model verwijdert de achtergrond en ons DTF-nabewerking verscherpt alle randen voor perfecte transferkwaliteit.
+          </div>
+          <p style="font-size:.72rem;color:var(--muted);margin:0 0 10px">Eerste keer laden ±30 sec (AI-model ~30 MB). Daarna direct.</p>
           <button class="le-btn le-btn-apply" id="leBgRemoveBtn" onclick="gsbLogoEditor.applyBgRemove()" style="width:100%">Achtergrond verwijderen</button>
           <div class="le-status" id="leBgStatus"></div>
         </div>
