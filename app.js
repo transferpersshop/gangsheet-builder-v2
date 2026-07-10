@@ -24,6 +24,7 @@ const I18N = {
     loadingVector:'Vector wordt verwerkt…', logoAdded:'toegevoegd',
     unsupportedFile:'Bestandstype niet ondersteund',
     unitLabel:'Meeteenheid',
+    layoutGapLabel:"Indeling & tussenruimte",
     gapLabel:"Tussenruimte tussen logo's",
     gapHelp:"Bepaal de tussenruimte tussen de logo's voor het knippen/snijden van de transfers.",
     bgLabel:'Vel-achtergrond (alleen preview)',
@@ -143,12 +144,10 @@ const I18N = {
     tourStepZoomBody:'Zoom in en uit op je vel met de knoppen of sneltoetsen (+, −, 0). Hier vind je ook "Vel vullen" om het vel automatisch vol te pakken en "Vel leegmaken" om opnieuw te beginnen.',
     tourStepSelTitle:'Geselecteerde logo',
     tourStepSelBody:'Klik op een logo op het vel om het hier te bewerken. Pas de afmeting, rotatie en kleuren aan, of dupliceer en verwijder het logo.',
-    tourStepGapTitle:'Tussenruimte',
-    tourStepGapBody:'Stel de afstand tussen logo\'s in. Deze tussenruimte wordt overal toegepast: bij kopiëren, dupliceren en "Vel vullen".',
+    tourStepLayoutGapTitle:'Indeling & tussenruimte',
+    tourStepLayoutGapBody:'Stel de afstand tussen logo\'s in en schakel optioneel over naar handmatige indeling. Bij handmatige indeling kunnen logo\'s vrij gesleept, overlapt en 360° gedraaid worden.',
     tourStepListTitle:"Geüploade logo's",
     tourStepListBody:'Overzicht van al je geüploade logo\'s met het totale aantal kopieën over alle vellen. Gebruik de +/− knoppen of typ een aantal om snel kopieën toe te voegen of te verwijderen.',
-    tourStepManualTitle:'Indeling modus',
-    tourStepManualBody:'Schakel hier over naar handmatige indeling. Logo\'s kunnen dan vrij gesleept, overlapt en 360° gedraaid worden. Handig als je zelf volledige controle over de layout wilt.',
     undoBtn:'Ongedaan maken', redoBtn:'Herhalen',
     projectSave:'Project opslaan', projectLoad:'Project laden',
     shortcutsBtn:'⌨ Sneltoetsen', shortcutsTitle:'Sneltoetsen',
@@ -174,6 +173,7 @@ const I18N = {
     loadingVector:'Processing vector file…', logoAdded:'added',
     unsupportedFile:'File type not supported',
     unitLabel:'Measurement unit',
+    layoutGapLabel:'Layout & spacing',
     gapLabel:'Spacing between logos',
     gapHelp:'Set the spacing between logos for cutting/trimming the transfers.',
     bgLabel:'Sheet background (preview only)',
@@ -293,12 +293,10 @@ const I18N = {
     tourStepZoomBody:'Zoom in and out on your sheet with the buttons or shortcuts (+, −, 0). Here you\'ll also find "Fill sheet" to auto-pack the sheet and "Clear sheet" to start over.',
     tourStepSelTitle:'Selected logo',
     tourStepSelBody:'Click a logo on the sheet to edit it here. Adjust size, rotation, and colors, or duplicate and delete the logo.',
-    tourStepGapTitle:'Spacing',
-    tourStepGapBody:'Set the distance between logos. This spacing is applied everywhere: when copying, duplicating, and "Fill sheet".',
+    tourStepLayoutGapTitle:'Layout & spacing',
+    tourStepLayoutGapBody:'Set the distance between logos and optionally switch to manual layout. In manual mode, logos can be freely dragged, overlapped, and rotated 360°.',
     tourStepListTitle:'Uploaded logos',
     tourStepListBody:'Overview of all your uploaded logos with the total number of copies across all sheets. Use the +/− buttons or type a number to quickly add or remove copies.',
-    tourStepManualTitle:'Layout mode',
-    tourStepManualBody:'Switch to manual layout here. Logos can then be freely dragged, overlapped, and rotated 360°. Useful when you want full control over the layout.',
     undoBtn:'Undo', redoBtn:'Redo',
     projectSave:'Save project', projectLoad:'Load project',
     shortcutsBtn:'⌨ Shortcuts', shortcutsTitle:'Keyboard Shortcuts',
@@ -1375,8 +1373,9 @@ async function pdfToSvg(arrayBuffer){
   }
   function fmtN(n){ return Math.round(n*1000)/1000; }
 
-  // Gradient detection flag — set when gradient operators are encountered
+  // Flags — set when operators are encountered that pdfToSvg can't convert
   let hasGradients = false;
+  let hasImages = false;
 
   // Graphics state
   let fillColor='#000000', strokeColor='#000000';
@@ -1548,6 +1547,13 @@ async function pdfToSvg(arrayBuffer){
           pathD='';
         }
         break;
+      // Embedded images — can't convert to SVG paths, must use raster
+      case OPS.paintImageXObject:
+      case OPS.paintInlineImageXObject:
+      case OPS.paintInlineImageXObjectGroup:
+      case OPS.paintImageXObjectRepeat:
+        hasImages=true;
+        break;
       // Gradient shading fill — just flag it, don't try to extract colors
       case OPS.shadingFill:
         hasGradients=true;
@@ -1599,8 +1605,8 @@ async function pdfToSvg(arrayBuffer){
     '</svg>'
   ].join('\n');
 
-  console.log(`[GSB] pdfToSvg: ${pathCount} paths, ${textElements.length} text items, hasGradients=${hasGradients}, tooManyPaths=${tooManyPaths}, SVG ${svgText.length} chars`);
-  return { svgText, pathCount, hasGradients, tooManyPaths, pageW: W, pageH: H };
+  console.log(`[GSB] pdfToSvg: ${pathCount} paths, ${textElements.length} text items, hasGradients=${hasGradients}, hasImages=${hasImages}, tooManyPaths=${tooManyPaths}, SVG ${svgText.length} chars`);
+  return { svgText, pathCount, hasGradients, hasImages, tooManyPaths, pageW: W, pageH: H };
 }
 
 // Load a PDF/AI file — simple rules:
@@ -1622,8 +1628,8 @@ async function loadPdfAsImage(arrayBuffer, name){
 
   showLogoLoading(name ? `"${name}" laden…` : 'Logo laden…');
 
-  // --- Step 1: Convert to SVG and detect gradients ---
-  let svgText = null, pdfHasGradients = false, svgPathCount = 0, pdfTooManyPaths = false;
+  // --- Step 1: Convert to SVG and detect gradients/images ---
+  let svgText = null, pdfHasGradients = false, pdfHasImages = false, svgPathCount = 0, pdfTooManyPaths = false;
   let pdfPageW = 0, pdfPageH = 0;
   try {
     const t0 = performance.now();
@@ -1631,16 +1637,17 @@ async function loadPdfAsImage(arrayBuffer, name){
     svgText = result.svgText;
     svgPathCount = result.pathCount;
     pdfHasGradients = result.hasGradients;
+    pdfHasImages = result.hasImages;
     pdfTooManyPaths = result.tooManyPaths;
     pdfPageW = result.pageW;
     pdfPageH = result.pageH;
-    console.log(`[GSB] pdfToSvg "${name}": ${svgPathCount} paths, gradients=${pdfHasGradients}, tooMany=${pdfTooManyPaths}, page=${pdfPageW}×${pdfPageH}, ${(performance.now()-t0).toFixed(0)}ms`);
+    console.log(`[GSB] pdfToSvg "${name}": ${svgPathCount} paths, gradients=${pdfHasGradients}, images=${pdfHasImages}, tooMany=${pdfTooManyPaths}, page=${pdfPageW}×${pdfPageH}, ${(performance.now()-t0).toFixed(0)}ms`);
   } catch(err){
     console.warn(`[GSB] pdfToSvg failed for "${name}":`, err);
   }
 
-  // --- PATH A: No gradients, not too many paths, valid SVG → editable SVG group ---
-  if(svgPathCount > 0 && !pdfHasGradients && !pdfTooManyPaths){
+  // --- PATH A: No gradients, no images, not too many paths, valid SVG → editable SVG group ---
+  if(svgPathCount > 0 && !pdfHasGradients && !pdfHasImages && !pdfTooManyPaths){
     console.log(`[GSB] "${name}": no gradients, loading as editable SVG`);
     hideLogoLoading();
     loadSvg(svgText, name);
@@ -1662,7 +1669,7 @@ async function loadPdfAsImage(arrayBuffer, name){
   }
 
   // --- PATH B: Has gradients OR conversion failed → pdf.js canvas render (display only) ---
-  const reason = pdfTooManyPaths ? `too many paths (${svgPathCount}≥${PDF_MAX_SVG_PATHS})` : pdfHasGradients ? 'gradients detected' : 'conversion failed';
+  const reason = pdfTooManyPaths ? `too many paths (${svgPathCount}≥${PDF_MAX_SVG_PATHS})` : pdfHasImages ? 'embedded images detected' : pdfHasGradients ? 'gradients detected' : 'conversion failed';
   console.log(`[GSB] "${name}": ${reason}, loading as display-only raster`);
   try {
     const pdf = await pdfjsLib.getDocument({ data: bufferForRaster }).promise;
@@ -6520,9 +6527,8 @@ const TOUR_STEPS = [
   { target:'#projectTitleSection',        titleKey:'tourStepProjectTitle', bodyKey:'tourStepProjectBody', pos:'right' },
   { target:'.left .section:nth-child(2)', titleKey:'tourStep1Title', bodyKey:'tourStep1Body', pos:'right' },
   { target:'.left .section:nth-child(3)', titleKey:'tourStep2Title', bodyKey:'tourStep2Body', pos:'right' },
-  { target:'#gapSection',                 titleKey:'tourStepGapTitle', bodyKey:'tourStepGapBody', pos:'right' },
+  { target:'#layoutGapSection',            titleKey:'tourStepLayoutGapTitle', bodyKey:'tourStepLayoutGapBody', pos:'right' },
   { target:'#itemListSection',            titleKey:'tourStepListTitle', bodyKey:'tourStepListBody', pos:'right' },
-  { target:'#manualModeSection',          titleKey:'tourStepManualTitle', bodyKey:'tourStepManualBody', pos:'right' },
   { target:'.zoom-bar',                   titleKey:'tourStepZoomTitle', bodyKey:'tourStepZoomBody', pos:'below' },
   { target:'.canvas-bottom-bar',          titleKey:'tourStep6Title', bodyKey:'tourStep6Body', pos:'above' },
   { target:'#selectedSection',            titleKey:'tourStepSelTitle', bodyKey:'tourStepSelBody', pos:'left' },

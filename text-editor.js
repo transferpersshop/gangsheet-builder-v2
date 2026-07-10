@@ -72,13 +72,21 @@ function open(){
   if(!_previewCssOk) _loadPreviewCss();
   _renderFontList();
   _showUsedFonts();
-  _jRenderRows();
-  // Ensure correct preview is visible for current tab
-  var activeTab = 'tekst';
-  var activeBtn = document.querySelector('.te-tab.te-tab-on');
-  if(activeBtn && activeBtn.dataset.tab) activeTab = activeBtn.dataset.tab;
-  _togglePreviewPane(activeTab);
+  // Auto-select default font if none chosen yet
+  if(!_currentFont) _autoSelectDefault();
   setTimeout(function(){ var t = document.getElementById('teTextInput'); if(t) t.focus(); }, 120);
+}
+async function _autoSelectDefault(){
+  try{
+    var def = FONTS.find(function(f){ return f.id === 'bebas-neue'; }) || FONTS[0];
+    _setStatus('Standaard font laden…','#6946c8');
+    _currentFont = await _loadFont(def.n, def.id, '400', 'normal');
+    _currentName = def.n; _currentId = def.id;
+    var lb = document.getElementById('teFontLabel');
+    if(lb){ lb.textContent = def.n; lb.style.fontFamily = "'"+def.n+"',sans-serif"; }
+    _setStatus('','');
+    _refreshAll(); _renderFontList();
+  } catch(e){ console.warn('[TE] default font failed',e); }
 }
 function close(){
   var m = document.getElementById('textEditorModal');
@@ -275,10 +283,31 @@ function onCsvImport(){
   inp.value = '';
 }
 
+/* ══════════ Sync textarea font (WYSIWYG) ══════════ */
+function _syncTextareaFont(){
+  var ta = document.getElementById('teTextInput');
+  if(!ta) return;
+  if(_currentName){
+    ta.style.fontFamily = "'"+_currentName+"', sans-serif";
+    ta.style.fontWeight = _bold ? '700' : '400';
+    ta.style.fontStyle = _italic ? 'italic' : 'normal';
+    ta.style.textTransform = _allCaps ? 'uppercase' : 'none';
+    ta.style.textDecoration = _underline ? 'underline' : 'none';
+    ta.style.color = (document.getElementById('teColor')||{}).value || '#000000';
+  } else {
+    ta.style.fontFamily = "'Inter', sans-serif";
+    ta.style.fontWeight = '400';
+    ta.style.fontStyle = 'normal';
+    ta.style.textTransform = 'none';
+    ta.style.textDecoration = 'none';
+    ta.style.color = '#000000';
+  }
+}
+
 /* ══════════ Styling toggles ══════════ */
 function _refreshAll(){
   _refreshPreview();
-  _jRefreshPreview();
+  _syncTextareaFont();
 }
 function toggleBold(){
   _bold = !_bold;
@@ -415,11 +444,12 @@ function _textToSvg(text, font, heightMm, color, opts){
   if(!text.trim()) return null;
   var upm = font.unitsPerEm||1000;
 
-  // ── Measure x-height (lowercase body) for sizing ──
+  // ── Measure cap-height (uppercase H) for sizing ──
   var refPath, refBb, refH;
-  try{ refPath = font.getPath('xon', 0, 0, upm); refBb = refPath.getBoundingBox(); refH = refBb.y2 - refBb.y1; }
+  try{ refPath = font.getPath('H', 0, 0, upm); refBb = refPath.getBoundingBox(); refH = refBb.y2 - refBb.y1; }
   catch(_){ refH = 0; }
-  if(refH <= 0) refH = upm * 0.5; // fallback
+  if(refH <= 0){ try{ refPath = font.getPath('X', 0, 0, upm); refBb = refPath.getBoundingBox(); refH = refBb.y2 - refBb.y1; } catch(_){ refH = 0; } }
+  if(refH <= 0) refH = upm * 0.7; // fallback
 
   var fontSize = (heightMm / refH) * upm;
   var extraSp = opts.spacing * fontSize / 100;
@@ -531,9 +561,10 @@ function _refreshPreview(){
     if(_allCaps) text = text.toUpperCase();
     var upm = font.unitsPerEm||1000;
     var refH;
-    try{ var refPath = font.getPath('xon',0,0,upm); var refBb = refPath.getBoundingBox(); refH = refBb.y2 - refBb.y1; }
+    try{ var rp = font.getPath('H',0,0,upm); var rb = rp.getBoundingBox(); refH = rb.y2 - rb.y1; }
     catch(_){ refH = 0; }
-    if(refH<=0) refH = upm*0.5;
+    if(refH<=0){ try{ var rp2 = font.getPath('X',0,0,upm); var rb2 = rp2.getBoundingBox(); refH = rb2.y2 - rb2.y1; }catch(_){ refH = 0; } }
+    if(refH<=0) refH = upm*0.7;
     var fontSize = (40/refH)*upm;
     var extraSp = _spacing * fontSize / 100;
 
@@ -677,19 +708,7 @@ function _getUsedFontsFromCanvas(){
    ══════════════════════════════════════════════════════════════════════════ */
 
 /* ── Tab switching ── */
-function switchTab(tab){
-  var tabs = document.querySelectorAll('.te-tab');
-  var panes = document.querySelectorAll('.te-pane');
-  tabs.forEach(function(t){ t.classList.toggle('te-tab-on', t.dataset.tab === tab); });
-  panes.forEach(function(p){ p.classList.toggle('te-pane-on', p.id === 'tePane_'+tab); });
-  _togglePreviewPane(tab);
-}
-function _togglePreviewPane(tab){
-  var tePrev = document.getElementById('tePreviewWrap');
-  var jPrev = document.getElementById('jPreviewWrap');
-  if(tePrev) tePrev.style.display = tab==='tekst' ? '' : 'none';
-  if(jPrev) jPrev.style.display = tab==='rugnummers' ? '' : 'none';
-}
+function switchTab(){} // tabs removed
 
 /* ── Jersey defaults ── */
 var JD = {
@@ -894,8 +913,9 @@ function _curvedTextSvg(text, font, heightMm, color, arcWidthMm, opts){
   if(!text.trim()) return null;
   var upm = font.unitsPerEm||1000;
   var refH;
-  try{ var rp = font.getPath('xon',0,0,upm); var rb = rp.getBoundingBox(); refH = rb.y2-rb.y1; }catch(_){ refH=0; }
-  if(refH<=0) refH=upm*0.5;
+  try{ var rp = font.getPath('H',0,0,upm); var rb = rp.getBoundingBox(); refH = rb.y2-rb.y1; }catch(_){ refH=0; }
+  if(refH<=0){ try{ var rp2 = font.getPath('X',0,0,upm); var rb2 = rp2.getBoundingBox(); refH = rb2.y2-rb2.y1; }catch(_){ refH=0; } }
+  if(refH<=0) refH=upm*0.7;
   var fontSize = (heightMm/refH)*upm;
   var scale = fontSize/(font.unitsPerEm||1000);
   var glyphs;
@@ -1078,8 +1098,9 @@ function _jRefreshPreview(){
 
 function _previewPath(font, text, h){
   var upm = font.unitsPerEm||1000;
-  var refH; try{ var rp=font.getPath('xon',0,0,upm);var rb=rp.getBoundingBox();refH=rb.y2-rb.y1;}catch(_){refH=0;}
-  if(refH<=0)refH=upm*0.5;
+  var refH; try{ var rp=font.getPath('H',0,0,upm);var rb=rp.getBoundingBox();refH=rb.y2-rb.y1;}catch(_){refH=0;}
+  if(refH<=0){try{var rp2=font.getPath('X',0,0,upm);var rb2=rp2.getBoundingBox();refH=rb2.y2-rb2.y1;}catch(_){refH=0;}}
+  if(refH<=0)refH=upm*0.7;
   var fontSize=(h/refH)*upm;
   var extraSp = _spacing*fontSize/100;
   var dAttr,bb;

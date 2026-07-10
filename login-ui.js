@@ -70,6 +70,8 @@ async function handleRegister(e){
   if(result.error) return showError(_translateError(result.error.message));
   if(result.needsConfirmation){
     showSuccess('Check je e-mail voor een bevestigingslink.');
+  } else if(result.needsApproval){
+    showSuccess('Je account is aangemaakt en wacht op goedkeuring door een beheerder. Je ontvangt bericht zodra het is goedgekeurd.');
   }
 }
 
@@ -272,20 +274,33 @@ function openAdmin(){
   if(!gsAuth.isAdmin) return;
   openModal('adminModal');
   adminTab('users');
+  // Pre-load approval count for badge
+  _updateApprovalBadge();
+}
+
+async function _updateApprovalBadge(){
+  try{
+    const { data } = await gsAuth.listUsers();
+    const pending = (data || []).filter(u => u.approved === false && !u.blocked);
+    const badge = document.getElementById('approvalBadge');
+    if(badge){
+      if(pending.length > 0){ badge.textContent = pending.length; badge.style.display = ''; }
+      else { badge.style.display = 'none'; }
+    }
+  }catch(_){}
 }
 
 function adminTab(tab){
-  const tabs = document.querySelectorAll('.admin-tabs button');
-  tabs.forEach(b => b.classList.remove('active'));
+  const navItems = document.querySelectorAll('.admin-nav-item');
+  navItems.forEach(b => b.classList.remove('active'));
   const contents = document.querySelectorAll('.admin-tab-content');
   contents.forEach(c => c.classList.remove('active'));
-  const tabMap = { users:0, projects:1, settings:2, stats:3 };
+  const tabMap = { users:0, approval:1, settings:2, stats:3 };
   const idx = tabMap[tab] ?? 0;
-  tabs[idx]?.classList.add('active');
-  document.getElementById('adminTab' + ['Users','Projects','Settings','Stats'][idx])?.classList.add('active');
-  // Load content
+  navItems[idx]?.classList.add('active');
+  document.getElementById('adminTab' + ['Users','Approval','Settings','Stats'][idx])?.classList.add('active');
   if(tab === 'users') _loadAdminUsers();
-  if(tab === 'projects') _loadAdminProjects();
+  if(tab === 'approval') _loadAdminApprovals();
   if(tab === 'settings') _loadAdminSettings();
   if(tab === 'stats') _loadAdminStats();
 }
@@ -303,11 +318,11 @@ async function _loadAdminUsers(){
       <div style="flex:1;min-width:140px"><label class="admin-lbl">Naam</label><input type="text" id="adminNewName" class="admin-inp" placeholder="Volledige naam"></div>
       <div style="flex:1;min-width:140px"><label class="admin-lbl">Bedrijf</label><input type="text" id="adminNewCompany" class="admin-inp" placeholder="Bedrijfsnaam"></div>
       <div style="flex:1.5;min-width:180px"><label class="admin-lbl">E-mail</label><input type="email" id="adminNewEmail" class="admin-inp" placeholder="naam@bedrijf.nl"></div>
-      <div style="flex:1;min-width:120px"><label class="admin-lbl">Wachtwoord</label><input type="text" id="adminNewPw" class="admin-inp" placeholder="Min. 6 tekens"></div>
       <div style="flex:0 0 auto"><label class="admin-lbl">Rol</label><select id="adminNewRole" class="admin-inp"><option value="user">Gebruiker</option><option value="printer">Printer</option><option value="admin">Admin</option></select></div>
-      <button class="btn btn-primary btn-sm" style="height:34px;white-space:nowrap" onclick="gsLoginUI.adminCreateUser()">+ Aanmaken</button>
+      <button class="btn btn-primary btn-sm" style="height:34px;white-space:nowrap" onclick="gsLoginUI.adminCreateUser()">+ Aanmaken & mail versturen</button>
     </div>
-    <p id="adminCreateMsg" style="font-size:.78rem;margin:6px 0 0;min-height:16px"></p>
+    <p style="font-size:.72rem;color:var(--muted);margin:6px 0 0">De gebruiker ontvangt een e-mail om een eigen wachtwoord in te stellen.</p>
+    <p id="adminCreateMsg" style="font-size:.78rem;margin:4px 0 0;min-height:16px"></p>
   </div>
   <div style="height:1px;background:var(--border);margin:14px 0"></div>`;
 
@@ -317,8 +332,8 @@ async function _loadAdminUsers(){
     <thead><tr><th>Naam</th><th>Bedrijf</th><th>Rol</th><th>Status</th><th>Aangemeld</th><th>Actie</th></tr></thead>
     <tbody>${data.map(u => {
       const date = new Date(u.created_at).toLocaleDateString('nl-NL', { day:'numeric', month:'short', year:'numeric' });
-      const badge = u.blocked ? 'badge-blocked' : u.role === 'admin' ? 'badge-admin' : u.role === 'printer' ? 'badge-printer' : 'badge-user';
-      const badgeText = u.blocked ? 'Geblokkeerd' : u.role === 'admin' ? 'Admin' : u.role === 'printer' ? 'Printer' : 'Gebruiker';
+      const badge = u.blocked ? 'badge-blocked' : u.approved === false ? 'badge-pending' : u.role === 'admin' ? 'badge-admin' : u.role === 'printer' ? 'badge-printer' : 'badge-user';
+      const badgeText = u.blocked ? 'Geblokkeerd' : u.approved === false ? 'Wacht op goedkeuring' : u.role === 'admin' ? 'Admin' : u.role === 'printer' ? 'Printer' : 'Gebruiker';
       return `<tr>
         <td>${_esc(u.display_name || '—')}</td>
         <td>${_esc(u.company_name || '—')}</td>
@@ -336,23 +351,31 @@ async function _loadAdminUsers(){
   container.innerHTML = html;
 }
 
+function _generatePassword(){
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%';
+  let pw = '';
+  for(let i = 0; i < 16; i++) pw += chars[Math.floor(Math.random() * chars.length)];
+  return pw;
+}
+
 async function adminCreateUser(){
   const name = document.getElementById('adminNewName')?.value?.trim() || '';
   const company = document.getElementById('adminNewCompany')?.value?.trim() || '';
   const email = document.getElementById('adminNewEmail')?.value?.trim() || '';
-  const pw = document.getElementById('adminNewPw')?.value || '';
   const role = document.getElementById('adminNewRole')?.value || 'user';
   const msg = document.getElementById('adminCreateMsg');
-  if(!email || !pw){ if(msg) msg.innerHTML='<span style="color:#ef4444">E-mail en wachtwoord zijn verplicht</span>'; return; }
-  if(pw.length < 6){ if(msg) msg.innerHTML='<span style="color:#ef4444">Wachtwoord moet minimaal 6 tekens zijn</span>'; return; }
+  if(!email){ if(msg) msg.innerHTML='<span style="color:#ef4444">E-mail is verplicht</span>'; return; }
   if(msg) msg.innerHTML='<span style="color:var(--muted)">Account aanmaken...</span>';
-  const result = await gsAuth.adminCreateUser(email, pw, name, company, role);
+  // Auto-generate temp password — user will set their own via reset email
+  const tempPw = _generatePassword();
+  const result = await gsAuth.adminCreateUser(email, tempPw, name, company, role, true);
   if(result.error){
     if(msg) msg.innerHTML='<span style="color:#ef4444">Fout: '+_esc(result.error.message||result.error)+'</span>';
   } else {
-    if(msg) msg.innerHTML='<span style="color:#22c55e">Account aangemaakt voor '+_esc(email)+'</span>';
-    // Clear fields
-    ['adminNewName','adminNewCompany','adminNewEmail','adminNewPw'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+    // Send password reset email so user can set their own password
+    try { await gsAuth.sendPasswordReset(email); } catch(_){}
+    if(msg) msg.innerHTML='<span style="color:#22c55e">Account aangemaakt — wachtwoord reset e-mail verstuurd naar '+_esc(email)+'</span>';
+    ['adminNewName','adminNewCompany','adminNewEmail'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
     _loadAdminUsers();
   }
 }
@@ -372,18 +395,51 @@ async function toggleBlock(userId, blocked){
   _loadAdminUsers();
 }
 
-async function _loadAdminProjects(){
-  const container = document.getElementById('adminProjectsTable');
+async function _loadAdminApprovals(){
+  const container = document.getElementById('adminApprovalTable');
   if(!container) return;
   container.innerHTML = '<p style="color:var(--muted)">Laden...</p>';
-  const { data } = await gsAuth.listAllProjects();
-  if(!data || data.length === 0){ container.innerHTML = '<p>Geen projecten gevonden.</p>'; return; }
+  const { data } = await gsAuth.listUsers();
+  // Filter pending (not approved and not blocked)
+  const pending = (data || []).filter(u => u.approved === false && !u.blocked);
+  const badge = document.getElementById('approvalBadge');
+  if(badge){
+    if(pending.length > 0){ badge.textContent = pending.length; badge.style.display = ''; }
+    else { badge.style.display = 'none'; }
+  }
+  if(pending.length === 0){
+    container.innerHTML = '<div style="text-align:center;padding:40px 0;color:var(--muted)"><p style="font-size:1.5rem;margin:0 0 8px">✓</p><p>Geen openstaande aanvragen</p></div>';
+    return;
+  }
   container.innerHTML = `<table class="admin-table">
-    <thead><tr><th>Project</th><th>Formaat</th><th>Logo's</th><th>Laatst bewerkt</th></tr></thead>
-    <tbody>${data.map(p => {
-      const date = new Date(p.updated_at).toLocaleDateString('nl-NL', { day:'numeric', month:'short', year:'numeric' });
-      return `<tr><td>${_esc(p.name)}</td><td>${p.sheet_format}</td><td>${p.logo_count || 0}</td><td>${date}</td></tr>`;
+    <thead><tr><th>Naam</th><th>Bedrijf</th><th>E-mail</th><th>Aangemeld</th><th>Actie</th></tr></thead>
+    <tbody>${pending.map(u => {
+      const date = new Date(u.created_at).toLocaleDateString('nl-NL', { day:'numeric', month:'short', year:'numeric' });
+      return `<tr>
+        <td>${_esc(u.display_name || '—')}</td>
+        <td>${_esc(u.company_name || '—')}</td>
+        <td>${_esc(u.email || '—')}</td>
+        <td>${date}</td>
+        <td style="display:flex;gap:6px">
+          <button class="btn btn-primary btn-sm" onclick="gsLoginUI.approveUser('${u.id}')">Goedkeuren</button>
+          <button class="btn btn-accent btn-sm" onclick="gsLoginUI.rejectUser('${u.id}')">Afwijzen</button>
+        </td>
+      </tr>`;
     }).join('')}</tbody></table>`;
+}
+
+async function approveUser(userId){
+  await gsAuth.approveUser(userId);
+  if(window.toast) window.toast('Account goedgekeurd', 'success');
+  _loadAdminApprovals();
+  _loadAdminUsers();
+}
+
+async function rejectUser(userId){
+  if(!confirm('Weet je zeker dat je dit account wilt afwijzen? Het account wordt geblokkeerd.')) return;
+  await gsAuth.toggleBlockUser(userId, true);
+  if(window.toast) window.toast('Account afgewezen', 'success');
+  _loadAdminApprovals();
 }
 
 async function _loadAdminSettings(){
@@ -446,7 +502,7 @@ window.gsLoginUI = {
   openSaveDialog, closeSaveDialog, confirmSave,
   openProfile, handleProfileSave,
   openAdmin, adminTab, changeRole, toggleBlock,
-  adminCreateUser,
+  adminCreateUser, approveUser, rejectUser,
   saveSetting,
 };
 

@@ -74,6 +74,12 @@ async function signIn(email, password){
     _user = null; _profile = null; _isAdmin = false;
     return { error: { message: 'Je account is geblokkeerd. Neem contact op met de beheerder.' } };
   }
+  // Check approval
+  if(_profile && _profile.approved === false){
+    await client.auth.signOut();
+    _user = null; _profile = null; _isAdmin = false;
+    return { error: { message: 'Je account wacht op goedkeuring door een beheerder. Je ontvangt bericht zodra het is goedgekeurd.' } };
+  }
   await _logUsage('login');
   showApp();
   _fireReady();
@@ -101,6 +107,12 @@ async function signUp(email, password, displayName, companyName){
   if(companyName && _profile && !_profile.company_name) profileUpdates.company_name = companyName;
   if(Object.keys(profileUpdates).length > 0) await updateProfile(profileUpdates);
   await _logUsage('signup');
+  // Check if approval is needed (self-registered accounts default to approved=false)
+  if(_profile && _profile.approved === false){
+    await client.auth.signOut();
+    _user = null; _profile = null; _isAdmin = false;
+    return { data, needsApproval: true };
+  }
   showApp();
   _fireReady();
   return { data };
@@ -358,37 +370,58 @@ async function getUserEmail(userId){
 }
 
 /* ── Admin: create user ── */
-async function adminCreateUser(email, password, displayName, companyName, role){
+async function adminCreateUser(email, password, displayName, companyName, role, autoApprove){
   const client = getClient();
   if(!client) return { error: { message: 'Supabase niet geladen' } };
   if(!_isAdmin) return { error: { message: 'Alleen admins kunnen accounts aanmaken' } };
-  // Use signUp via Supabase (will auto-confirm if email confirmation is off)
-  // We temporarily sign up the new user, then restore admin session
   const adminSession = (await client.auth.getSession()).data?.session;
   const { data, error } = await client.auth.signUp({
     email, password,
     options: { data: { display_name: displayName || '', company_name: companyName || '' } }
   });
   if(error) return { error };
-  // Restore admin session
   if(adminSession) await client.auth.setSession(adminSession);
-  // Update role if needed
-  if(data?.user && role && role !== 'user'){
-    try{
-      const { error: roleErr } = await client.from('profiles').update({ role }).eq('id', data.user.id);
-      if(roleErr) console.warn('Could not set role:', roleErr.message);
-    }catch(_){}
+  // Set role and auto-approve if created by admin
+  if(data?.user){
+    const updates = {};
+    if(role && role !== 'user') updates.role = role;
+    if(autoApprove) updates.approved = true;
+    if(Object.keys(updates).length > 0){
+      try{
+        const { error: upErr } = await client.from('profiles').update(updates).eq('id', data.user.id);
+        if(upErr) console.warn('Could not update profile:', upErr.message);
+      }catch(_){}
+    }
   }
   return { data };
+}
+
+/* ── Admin: send password reset email ── */
+async function sendPasswordReset(email){
+  const client = getClient();
+  if(!client) return { error: { message: 'Supabase niet geladen' } };
+  const { error } = await client.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.origin + window.location.pathname
+  });
+  return { error };
+}
+
+/* ── Admin: approve user account ── */
+async function approveUser(userId){
+  const client = getClient();
+  if(!client) return { error: { message: 'Supabase niet geladen' } };
+  if(!_isAdmin) return { error: { message: 'Alleen admins' } };
+  const { error } = await client.from('profiles').update({ approved: true }).eq('id', userId);
+  return { error };
 }
 
 /* ── Expose API ── */
 window.gsAuth = {
   init,
-  signIn, signUp, signOut, resetPassword,
+  signIn, signUp, signOut, resetPassword, sendPasswordReset,
   getProfile, updateProfile,
   saveProject, loadProject, listProjects, deleteProject,
-  listUsers, updateUserRole, toggleBlockUser,
+  listUsers, updateUserRole, toggleBlockUser, approveUser,
   listAllProjects,
   adminCreateUser,
   getSettings, updateSetting,
