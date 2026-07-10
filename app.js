@@ -3372,7 +3372,7 @@ function renderSelectedPanel(){
   panel.innerHTML = `
     <!-- ── Quick actions ── -->
     <div class="toolbar" style="margin-bottom:14px">
-      ${obj.type === 'image' ? '<button class="tool-btn" data-act="edit-logo" style="background:linear-gradient(135deg,rgba(105,70,200,.08),rgba(29,154,175,.08));color:var(--primary);font-weight:700">Bewerken</button>' : ''}
+      ${(obj.type === 'image' || obj.type === 'group') ? '<button class="tool-btn" data-act="edit-logo" style="background:linear-gradient(135deg,rgba(105,70,200,.08),rgba(29,154,175,.08));color:var(--primary);font-weight:700">Bewerken</button>' : ''}
       <button class="tool-btn" data-act="rot90">${t('tbRotate')}</button>
       <button class="tool-btn" data-act="dup">${t('tbDup')}</button>
       <button class="tool-btn" data-act="del" style="background:#fee2e2;color:#dc2626">${t('tbDel')}</button>

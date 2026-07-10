@@ -13,6 +13,8 @@ var _workCtx   = null;
 var _previewEl = null;     // preview <canvas> in modal
 var _activeTool = '';      // 'outline' | 'color' | 'upscale' | 'bgremove'
 var _modified  = false;
+var _origCanvasW = 0;     // original work canvas dimensions (before any edits)
+var _origCanvasH = 0;
 
 // Outline
 var _outColor  = '#FFFFFF';
@@ -37,26 +39,40 @@ function open(fabricObj){
   _pickedRGB = null;
   _outWidth = 0;
 
-  // Get the original image element
-  var imgEl = fabricObj.getElement();
-  if(!imgEl) return;
+  // Get pixel data — raster via getElement(), vector via toCanvasElement()
+  var srcCanvas;
+  var nw, nh;
 
-  // Create a clean copy of the original image
-  var tmpC = document.createElement('canvas');
-  var nw = imgEl.naturalWidth || imgEl.width;
-  var nh = imgEl.naturalHeight || imgEl.height;
-  tmpC.width = nw; tmpC.height = nh;
-  var tc = tmpC.getContext('2d');
-  tc.drawImage(imgEl, 0, 0);
+  if(fabricObj.type === 'image'){
+    var imgEl = fabricObj.getElement();
+    if(!imgEl) return;
+    nw = imgEl.naturalWidth || imgEl.width;
+    nh = imgEl.naturalHeight || imgEl.height;
+    srcCanvas = document.createElement('canvas');
+    srcCanvas.width = nw; srcCanvas.height = nh;
+    srcCanvas.getContext('2d').drawImage(imgEl, 0, 0);
+  } else if(fabricObj.toCanvasElement){
+    // Vector group (SVG) — render to pixel canvas
+    srcCanvas = fabricObj.toCanvasElement();
+    nw = srcCanvas.width;
+    nh = srcCanvas.height;
+  } else {
+    return;
+  }
+
+  if(!nw || !nh) return;
+
+  _origCanvasW = nw;
+  _origCanvasH = nh;
 
   _origImg = new Image();
-  _origImg.src = tmpC.toDataURL('image/png');
+  _origImg.src = srcCanvas.toDataURL('image/png');
 
   // Init work canvas
   _workCanvas = document.createElement('canvas');
   _workCanvas.width = nw; _workCanvas.height = nh;
   _workCtx = _workCanvas.getContext('2d');
-  _workCtx.drawImage(imgEl, 0, 0);
+  _workCtx.drawImage(srcCanvas, 0, 0);
 
   // Show modal
   var m = document.getElementById('logoEditorModal');
@@ -527,11 +543,21 @@ function apply(){
   var nw = _workCanvas.width, nh = _workCanvas.height;
 
   fabric.Image.fromURL(dataUrl, function(newImg){
-    // Keep position, angle, flip
+    // Compute correct scale — preserve visual size, adjusted for canvas size changes
+    // origCanvasW/H = pixel dimensions when we opened the editor
+    // nw/nh = pixel dimensions after editing (may differ due to outline padding / upscale)
+    var origVisualW = obj.width * Math.abs(obj.scaleX);
+    var origVisualH = obj.height * Math.abs(obj.scaleY);
+    var signX = obj.scaleX >= 0 ? 1 : -1;
+    var signY = obj.scaleY >= 0 ? 1 : -1;
+    // Scale: keep same px-per-unit ratio as original, so outline grows and upscale grows
+    var newScaleX = (_origCanvasW > 0) ? (origVisualW / _origCanvasW) * signX : obj.scaleX;
+    var newScaleY = (_origCanvasH > 0) ? (origVisualH / _origCanvasH) * signY : obj.scaleY;
+
     newImg.set({
       left: obj.left, top: obj.top, angle: obj.angle,
       flipX: obj.flipX, flipY: obj.flipY,
-      scaleX: obj.scaleX, scaleY: obj.scaleY,
+      scaleX: newScaleX, scaleY: newScaleY,
     });
     // Copy custom properties
     newImg._id = obj._id;
@@ -540,11 +566,9 @@ function apply(){
     newImg._naturalW = nw;
     newImg._naturalH = nh;
 
-    // Adjust mm dimensions based on size change
-    var origNW = obj._naturalW || (obj.getElement()?.naturalWidth || nw);
-    var origNH = obj._naturalH || (obj.getElement()?.naturalHeight || nh);
-    var ratioW = nw / origNW;
-    var ratioH = nh / origNH;
+    // Adjust mm dimensions based on canvas size change
+    var ratioW = (_origCanvasW > 0) ? nw / _origCanvasW : 1;
+    var ratioH = (_origCanvasH > 0) ? nh / _origCanvasH : 1;
     newImg._mmW = (obj._mmW || 50) * ratioW;
     newImg._mmH = (obj._mmH || 50) * ratioH;
     newImg._mmLeft = obj._mmLeft;
