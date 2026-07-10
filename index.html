@@ -935,7 +935,7 @@ window.addEventListener('load', ()=>{
         <tr><td style="padding:3px 8px 3px 0;color:var(--muted)">0</td><td style="padding:3px 0" data-i18n="zoomFit">Passend</td></tr>
       </table>
     </div>
-    <p class="version-tag">v2.14.1 · 11-07-2026</p>
+    <p class="version-tag">v2.15.0 · 11-07-2026</p>
   </div>
 </div>
 
@@ -1179,8 +1179,8 @@ window.addEventListener('load', ()=>{
   .le-tool-btn.active svg{opacity:1}
   .le-main{flex:1;min-width:0;display:flex;flex-direction:column;overflow-y:auto;max-height:72vh}
   /* Preview area */
-  .le-preview-wrap{background:var(--bg);padding:16px;display:flex;align-items:center;justify-content:center;min-height:140px;position:relative;border-bottom:1px solid var(--border)}
-  .le-preview-wrap canvas{max-width:100%;max-height:240px;border-radius:4px}
+  .le-preview-wrap{background:var(--bg);padding:16px;display:flex;align-items:center;justify-content:center;min-height:160px;position:relative;border-bottom:1px solid var(--border)}
+  .le-preview-wrap canvas{max-width:100%;max-height:360px;border-radius:4px}
   .le-file-name{position:absolute;top:8px;left:12px;font-size:.64rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;opacity:.6}
   /* Tool panels */
   .le-tool-panel{display:none;padding:16px 18px;border-bottom:1px solid var(--border)}
@@ -1206,6 +1206,10 @@ window.addEventListener('load', ()=>{
   /* Placeholder when no tool selected */
   .le-placeholder{padding:24px 18px;text-align:center;color:var(--muted);font-size:.82rem}
   .le-placeholder svg{width:32px;height:32px;margin-bottom:8px;opacity:.3}
+  /* Color chips (auto-detected swatches) */
+  .le-color-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+  .le-color-chip{width:32px;height:32px;border-radius:6px;border:2px solid rgba(0,0,0,.1);cursor:pointer;transition:transform .1s,box-shadow .1s;padding:0}
+  .le-color-chip:hover{transform:scale(1.15);box-shadow:0 2px 8px rgba(0,0,0,.2);border-color:var(--primary)}
 </style>
 
 <div class="gsb-modal-backdrop" id="logoEditorModal" onclick="if(event.target===this)gsbLogoEditor.close()">
@@ -1217,21 +1221,21 @@ window.addEventListener('load', ()=>{
     <div class="le-body">
       <!-- ── Left tool strip ── -->
       <div class="le-sidebar">
-        <button class="le-tool-btn" data-tool="outline" onclick="gsbLogoEditor.selectTool('outline')">
-          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>
-          Outline
-        </button>
         <button class="le-tool-btn" data-tool="color" onclick="gsbLogoEditor.selectTool('color')">
           <svg viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.9 0 1.7-.8 1.7-1.7 0-.4-.2-.8-.4-1.1-.2-.3-.4-.6-.4-1 0-.9.8-1.7 1.7-1.7H17c3 0 5.5-2.5 5.5-5.5C22.5 5.5 17.8 2 12 2z"/><circle cx="6.5" cy="11.5" r="1.5" fill="currentColor" opacity=".4"/><circle cx="10" cy="7.5" r="1.5" fill="currentColor" opacity=".4"/><circle cx="15" cy="7.5" r="1.5" fill="currentColor" opacity=".4"/><circle cx="18" cy="11.5" r="1.5" fill="currentColor" opacity=".4"/></svg>
           Kleur
         </button>
+        <button class="le-tool-btn" data-tool="bgremove" id="leToolBgRemove" onclick="gsbLogoEditor.selectTool('bgremove')">
+          <svg viewBox="0 0 24 24"><path d="M5 3a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2H5z" stroke-dasharray="4 2"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18" opacity=".15"/></svg>
+          BG weg
+        </button>
+        <button class="le-tool-btn" data-tool="outline" onclick="gsbLogoEditor.selectTool('outline')">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>
+          Outline
+        </button>
         <button class="le-tool-btn" data-tool="upscale" id="leToolUpscale" onclick="gsbLogoEditor.selectTool('upscale')">
           <svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><line x1="21" y1="3" x2="14" y2="10"/><polyline points="9 21 3 21 3 15"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
           Upscale
-        </button>
-        <button class="le-tool-btn" data-tool="bgremove" onclick="gsbLogoEditor.selectTool('bgremove')">
-          <svg viewBox="0 0 24 24"><path d="M5 3a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2H5z" stroke-dasharray="4 2"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18" opacity=".15"/></svg>
-          BG weg
         </button>
       </div>
 
@@ -1249,29 +1253,19 @@ window.addEventListener('load', ()=>{
           <p>Kies een tool links om het logo te bewerken</p>
         </div>
 
-        <!-- ═══ Outline ═══ -->
-        <div class="le-tool-panel" id="lePanel_outline">
-          <h4>Outline toevoegen</h4>
-          <div class="le-row">
-            <label>Kleur</label>
-            <input type="color" id="leOutColor" value="#FFFFFF">
-            <span style="font-size:.72rem;color:var(--muted)">Wit is standaard voor DTF</span>
-          </div>
-          <div class="le-row">
-            <label>Dikte (px)</label>
-            <input type="range" id="leOutWidth" min="0" max="40" step="1" value="8" oninput="gsbLogoEditor.previewOutline()">
-            <span class="le-val" id="leOutWidthVal">8</span>
-          </div>
-          <button class="le-btn le-btn-apply" onclick="gsbLogoEditor.applyOutline()" style="width:100%;margin-top:8px">Outline toepassen</button>
-        </div>
-
-        <!-- ═══ Kleur vervangen ═══ -->
+        <!-- ═══ 1. Kleur aanpassen ═══ -->
         <div class="le-tool-panel" id="lePanel_color">
-          <h4>Kleur vervangen</h4>
+          <h4>Kleur aanpassen</h4>
+
+          <div style="margin-bottom:10px">
+            <label style="font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;display:block;margin-bottom:6px">Kleuren in logo</label>
+            <div class="le-color-chips" id="leColorSwatches"></div>
+          </div>
+
           <div class="le-row">
             <label>Bronkleur</label>
             <div class="le-swatch" id="lePickedSwatch" style="background:repeating-conic-gradient(#ddd 0% 25%,#fff 0% 50%) 50%/10px 10px;border-color:#ddd"></div>
-            <span class="le-swatch-hex" id="lePickedHex">Klik op preview</span>
+            <span class="le-swatch-hex" id="lePickedHex">Kies hieronder of gebruik pipet</span>
             <button class="le-btn le-btn-pick" onclick="gsbLogoEditor.startPick()" style="margin-left:auto;padding:6px 10px">
               <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:3px"><path d="M2 22l1-6.5L16 2.5l5.5 5.5L8.5 21z"/><path d="M15 5l4 4"/></svg>
               Pipet
@@ -1291,34 +1285,45 @@ window.addEventListener('load', ()=>{
           <div style="border-top:1px solid var(--border);margin-top:14px;padding-top:12px">
             <h4 style="margin:0 0 8px;font-size:.72rem;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:800">Snel omzetten</h4>
             <div style="display:flex;gap:8px">
-              <button class="le-btn" onclick="gsbLogoEditor.makeAllBlack()" style="flex:1;background:#1a1a1a;color:#fff;font-size:.78rem;padding:8px 0;border-radius:8px">
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px"><circle cx="12" cy="12" r="10"/></svg>
-                Maak zwart
-              </button>
-              <button class="le-btn" onclick="gsbLogoEditor.makeAllWhite()" style="flex:1;background:#fff;color:#1a1a1a;font-size:.78rem;padding:8px 0;border:1px solid #ddd;border-radius:8px">
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px"><circle cx="12" cy="12" r="10"/></svg>
-                Maak wit
-              </button>
+              <button class="le-btn" onclick="gsbLogoEditor.makeAllBlack()" style="flex:1;background:#1a1a1a;color:#fff;font-size:.78rem;padding:8px 0;border-radius:8px">Maak zwart</button>
+              <button class="le-btn" onclick="gsbLogoEditor.makeAllWhite()" style="flex:1;background:#fff;color:#1a1a1a;font-size:.78rem;padding:8px 0;border:1px solid #ddd;border-radius:8px">Maak wit</button>
             </div>
           </div>
         </div>
 
-        <!-- ═══ Upscale ═══ -->
+        <!-- ═══ 2. BG Remove (bitmap only) ═══ -->
+        <div class="le-tool-panel" id="lePanel_bgremove">
+          <h4>Achtergrond verwijderen</h4>
+          <button class="le-btn le-btn-apply" id="leBgRemoveBtn" onclick="gsbLogoEditor.applyBgRemove()" style="width:100%">Achtergrond verwijderen</button>
+          <div class="le-status" id="leBgStatus"></div>
+        </div>
+
+        <!-- ═══ 3. Outline ═══ -->
+        <div class="le-tool-panel" id="lePanel_outline">
+          <h4>Outline toevoegen</h4>
+          <div class="le-row">
+            <label>Kleur</label>
+            <input type="color" id="leOutColor" value="#FFFFFF">
+            <span style="font-size:.72rem;color:var(--muted)">Wit is standaard voor DTF</span>
+          </div>
+          <div class="le-row">
+            <label>Dikte (px)</label>
+            <input type="range" id="leOutWidth" min="0" max="40" step="1" value="8" oninput="gsbLogoEditor.previewOutline()">
+            <span class="le-val" id="leOutWidthVal">8</span>
+          </div>
+          <button class="le-btn le-btn-apply" onclick="gsbLogoEditor.applyOutline()" style="width:100%;margin-top:8px">Outline toepassen</button>
+        </div>
+
+        <!-- ═══ 4. Upscale (bitmap only) ═══ -->
         <div class="le-tool-panel" id="lePanel_upscale">
           <h4>Afbeelding opschalen</h4>
-          <div style="background:var(--bg);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:.74rem;color:var(--fg);line-height:1.45">
-            <strong style="color:var(--primary)">Waarom opschalen?</strong><br>
-            DTF-prints vereisen minimaal <strong>150 DPI</strong> (ideaal 300 DPI) voor scherpe randen en fijne details. Een klein logo (bijv. 400×400 px) wordt wazig bij grotere afdrukformaten. Opschalen vergroot de pixeldichtheid zodat lijnen, tekst en randen scherp blijven op de transferfilm.
-          </div>
           <div class="le-row">
             <label>Factor</label>
             <select id="leUpFactor">
-              <option value="2">2× — standaard, verdubbelt resolutie</option>
-              <option value="3">3× — kleine logo's naar printbaar</option>
-              <option value="4">4× — maximaal, voor erg kleine bestanden</option>
+              <option value="2">2×</option>
+              <option value="3">3×</option>
+              <option value="4">4×</option>
             </select>
-          </div>
-          <div class="le-row">
             <span class="le-info" id="leUpInfo" style="margin:0;font-weight:700"></span>
           </div>
           <div class="le-row">
@@ -1327,18 +1332,6 @@ window.addEventListener('load', ()=>{
             <span class="le-val" id="leSharpVal">0.5</span>
           </div>
           <button class="le-btn le-btn-apply" onclick="gsbLogoEditor.applyUpscale()" style="width:100%;margin-top:8px">Opschalen</button>
-        </div>
-
-        <!-- ═══ BG Remove ═══ -->
-        <div class="le-tool-panel" id="lePanel_bgremove">
-          <h4>Achtergrond verwijderen</h4>
-          <div style="background:var(--bg);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:.74rem;color:var(--fg);line-height:1.45">
-            <strong style="color:var(--primary)">DTF-geoptimaliseerd</strong><br>
-            Speciaal afgestemd op DTF-transfers: keihard alpha-kanaal (100% transparant of 100% dekkend), geen zachte randen of schaduwen, en witte gebieden binnen letters/vormen blijven behouden. Het AI-model verwijdert de achtergrond en ons DTF-nabewerking verscherpt alle randen voor perfecte transferkwaliteit.
-          </div>
-          <p style="font-size:.72rem;color:var(--muted);margin:0 0 10px">Eerste keer laden ±30 sec (AI-model ~30 MB). Daarna direct.</p>
-          <button class="le-btn le-btn-apply" id="leBgRemoveBtn" onclick="gsbLogoEditor.applyBgRemove()" style="width:100%">Achtergrond verwijderen</button>
-          <div class="le-status" id="leBgStatus"></div>
         </div>
       </div>
     </div>
