@@ -778,6 +778,22 @@ function gsbApplyTheme(theme){
   try{ localStorage.setItem('gsb-theme', th); }catch(_){ }
 }
 window.gsbApplyTheme = gsbApplyTheme;
+function gsbToggleTheme(){
+  const cur = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+  const next = cur === 'dark' ? 'light' : 'dark';
+  gsbApplyTheme(next);
+  _syncThemeIcon();
+  // In het account vastzetten (indien ingelogd)
+  try{ if(window.gsAuth && gsAuth.user && gsAuth.updateProfile) gsAuth.updateProfile({ theme: next }); }catch(_){ }
+}
+window.gsbToggleTheme = gsbToggleTheme;
+function _syncThemeIcon(){
+  const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const m = document.getElementById('themeIconMoon'), s = document.getElementById('themeIconSun');
+  if(m) m.style.display = dark ? 'none' : '';
+  if(s) s.style.display = dark ? '' : 'none';
+}
+setTimeout(_syncThemeIcon, 0);
 try{
   if(window.gsAuth && typeof gsAuth.onReady === 'function'){
     gsAuth.onReady(() => { if(gsAuth.profile && gsAuth.profile.theme) gsbApplyTheme(gsAuth.profile.theme); });
@@ -2024,11 +2040,15 @@ function autoCropSvg(svgText, callback){
       callback(svgText); return;
     }
 
-    // Map pixel bounds to viewBox coordinates
-    const cropVbX = vbX + (minX / renderW) * vbW;
-    const cropVbY = vbY + (minY / renderH) * vbH;
-    const cropVbW = ((maxX - minX + 1) / renderW) * vbW;
-    const cropVbH = ((maxY - minY + 1) / renderH) * vbH;
+    // Map pixel bounds to viewBox coordinates — met kleine veiligheidsmarge
+    // (1,5%) zodat outlines/strokes op de rand nooit worden afgesneden
+    const safPx = Math.max(2, Math.round(Math.max(renderW, renderH) * 0.015));
+    const sMinX = Math.max(0, minX - safPx), sMinY = Math.max(0, minY - safPx);
+    const sMaxX = Math.min(renderW - 1, maxX + safPx), sMaxY = Math.min(renderH - 1, maxY + safPx);
+    const cropVbX = vbX + (sMinX / renderW) * vbW;
+    const cropVbY = vbY + (sMinY / renderH) * vbH;
+    const cropVbW = ((sMaxX - sMinX + 1) / renderW) * vbW;
+    const cropVbH = ((sMaxY - sMinY + 1) / renderH) * vbH;
 
     // Set viewBox to start at 0,0 and wrap all children in a translate group.
     // This ensures Fabric's internal path coordinates are near the origin,
