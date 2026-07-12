@@ -1,8 +1,8 @@
 /* ================================================================
    logo-editor.js — Per-logo bewerkingsmodal voor Gang Sheet Builder
-   v2.19.0 — echte vector preview (SVG-bron), SVG-natieve outline die
-   in de PDF-export (drukproef + print ready) behouden blijft,
-   auto-commit van openstaande edits bij "Toepassen"
+   v2.20.0 — retina-scherpe preview met vol-brede achtergrond,
+   witte-achtergrond verwijdering (globaal + de-fringe),
+   kleurclustering (vectorizer-stijl), SVG-natieve outline
    ================================================================ */
 (function(){
 'use strict';
@@ -24,6 +24,7 @@ var _isVector  = false;
 // Color replace state
 var _pickMode   = false;
 var _pickedRGB  = null;
+var _pickedTol  = 40;   // 40 = pipet (exact), 60 = kleur-chip (hele cluster)
 
 // Loupe
 var _loupeCanvas = null;
@@ -383,23 +384,30 @@ function _drawPreview(sourceCanvas){
   var src = sourceCanvas || _workCanvas;
   if(!src) return;
   var wrap = _previewEl.parentElement;
-  var maxW = (wrap ? wrap.clientWidth : 560) - 32;
-  var maxH = 420;
-  var scale = maxW / src.width;
-  if(src.height * scale > maxH) scale = maxH / src.height;
-  var pw = Math.round(src.width * scale);
-  var ph = Math.round(src.height * scale);
-  _previewEl.width = pw;
-  _previewEl.height = ph;
+  var maxW = ((wrap && wrap.clientWidth) || 800) - 24;
+  var maxH = ((wrap && wrap.clientHeight) || 420) - 24;
+  if(maxW < 50) maxW = 560;
+  if(maxH < 50) maxH = 400;
+  var scale = Math.min(maxW / src.width, maxH / src.height);
+  var pw = Math.max(1, Math.round(src.width * scale));
+  var ph = Math.max(1, Math.round(src.height * scale));
+  // Retina-scherp: canvas op devicePixelRatio renderen, CSS-maat apart zetten
+  var dpr = Math.min(3, window.devicePixelRatio || 1);
+  _previewEl.width = Math.round(pw * dpr);
+  _previewEl.height = Math.round(ph * dpr);
+  _previewEl.style.width = pw + 'px';
+  _previewEl.style.height = ph + 'px';
   var ctx = _previewEl.getContext('2d');
-  // Logo's met wit standaard op zwarte achtergrond tonen
-  if(_containsWhite(src)){
-    ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, pw, ph);
-  } else {
-    _drawCheckerboard(ctx, pw, ph);
+  ctx.clearRect(0, 0, _previewEl.width, _previewEl.height);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(src, 0, 0, _previewEl.width, _previewEl.height);
+  // Achtergrond op de hele preview-strook: zwart bij witte content, anders checker
+  if(wrap && wrap.classList){
+    var dark = _containsWhite(src);
+    wrap.classList.toggle('le-dark', dark);
+    wrap.classList.toggle('le-checker', !dark);
   }
-  ctx.drawImage(src, 0, 0, pw, ph);
 }
 
 function _drawCheckerboard(ctx, w, h){
@@ -418,6 +426,7 @@ function _livePreview(){
   _liveTimer = setTimeout(function(){
     if(_activeTool === 'outline') _liveOutline();
     else if(_activeTool === 'color') _liveColor();
+    else if(_activeTool === 'bgremove' && _isRaster) _liveWhiteRemove();
     else _drawPreview(_workCanvas);
   }, 40);
 }
@@ -453,18 +462,10 @@ function _liveOutline(){
 
 function _liveColor(){
   if(!_pickedRGB){ _drawPreview(_workCanvas); return; }
-  if(_isVector){
-    // For vectors, show raster approximation in preview
-    var rc = document.getElementById('leReplColor');
-    var replHex = rc ? rc.value : '#FF0000';
-    var tmp = _buildColorReplace(_workCanvas, _pickedRGB, replHex, 40);
-    _drawPreview(tmp);
-    return;
-  }
-  var rc2 = document.getElementById('leReplColor');
-  var replHex2 = rc2 ? rc2.value : '#FF0000';
-  var tmp2 = _buildColorReplace(_workCanvas, _pickedRGB, replHex2, 40);
-  _drawPreview(tmp2);
+  var rc = document.getElementById('leReplColor');
+  var replHex = rc ? rc.value : '#FF0000';
+  var tmp = _buildColorReplace(_workCanvas, _pickedRGB, replHex, _pickedTol);
+  _drawPreview(tmp);
 }
 
 /* ══════════ Tool switching ══════════ */
@@ -491,9 +492,14 @@ function _resetToolPanels(){
   var owv = document.getElementById('leOutWidthVal');
   if(owv) owv.textContent = '0';
   _pickedRGB = null;
+  _pickedTol = 40;
   _updatePickedSwatch();
   var rc = document.getElementById('leReplColor');
   if(rc) rc.value = '#FF0000';
+  var wt = document.getElementById('leWhiteThresh');
+  if(wt) wt.value = '12';
+  var wtv = document.getElementById('leWhiteThreshVal');
+  if(wtv) wtv.textContent = '12';
 }
 
 /* ══════════ Extract dominant colors ══════════ */
@@ -543,6 +549,7 @@ function _extractColors(){
     container.querySelectorAll('.le-color-chip').forEach(function(chip){
       chip.onclick = function(){
         _pickedRGB = { r: parseInt(chip.dataset.r,10), g: parseInt(chip.dataset.g,10), b: parseInt(chip.dataset.b,10), hex: chip.dataset.hex };
+        _pickedTol = 40; // vector-kleuren zijn exact
         _updatePickedSwatch();
         _liveColor();
       };
@@ -550,46 +557,82 @@ function _extractColors(){
     return;
   }
 
-  // Raster: sample pixel colors from workCanvas
+  // Raster: hoofdkleuren clusteren (vectorizer-stijl) — anti-alias en
+  // semi-transparante randpixels worden gebundeld i.p.v. als aparte
+  // "kleuren" getoond. Kleine clusters (< 1,5% van de pixels) vervallen.
   if(!_workCanvas) return;
   var w = _workCanvas.width, h = _workCanvas.height;
-  var sampleW = Math.min(w, 200), sampleH = Math.min(h, 200);
+  var sc = Math.min(1, 300 / Math.max(w, h));
+  var sampleW = Math.max(1, Math.round(w * sc)), sampleH = Math.max(1, Math.round(h * sc));
   var tmpC = document.createElement('canvas');
   tmpC.width = sampleW; tmpC.height = sampleH;
   var tctx = tmpC.getContext('2d');
   tctx.drawImage(_workCanvas, 0, 0, sampleW, sampleH);
   var data = tctx.getImageData(0, 0, sampleW, sampleH).data;
+
+  // Stap 1: kwantiseer naar buckets (alleen stevig dekkende pixels —
+  // randpixels met lage alpha zijn meng-ruis en tellen niet mee)
   var buckets = {};
+  var total = 0;
   for(var i = 0; i < data.length; i += 4){
-    if(data[i+3] < 30) continue;
-    var r = Math.round(data[i] / 16) * 16;
-    var g = Math.round(data[i+1] / 16) * 16;
-    var b = Math.round(data[i+2] / 16) * 16;
-    r = Math.min(r, 240); g = Math.min(g, 240); b = Math.min(b, 240);
+    if(data[i+3] < 140) continue;
+    var r = Math.min(240, Math.round(data[i] / 16) * 16);
+    var g = Math.min(240, Math.round(data[i+1] / 16) * 16);
+    var b = Math.min(240, Math.round(data[i+2] / 16) * 16);
     var key = r + ',' + g + ',' + b;
     buckets[key] = (buckets[key] || 0) + 1;
+    total++;
   }
-  var sorted = Object.keys(buckets).sort(function(a,b2){ return buckets[b2] - buckets[a]; });
-  var unique = [];
-  for(var j = 0; j < sorted.length && unique.length < 8; j++){
-    var parts = sorted[j].split(',').map(Number);
-    var tooClose = false;
-    for(var k = 0; k < unique.length; k++){
-      var dr = parts[0]-unique[k][0], dg = parts[1]-unique[k][1], db = parts[2]-unique[k][2];
-      if(dr*dr + dg*dg + db*db < 2000){ tooClose = true; break; }
+  if(total === 0){ container.innerHTML = ''; return; }
+
+  // Stap 2: greedy clustering — bucket bij dichtstbijzijnd cluster voegen
+  // (gewogen gemiddelde), anders nieuw cluster. Merge-afstand ~74 RGB.
+  var MERGE_SQ = 74 * 74;
+  var sorted = Object.keys(buckets).sort(function(a, b2){ return buckets[b2] - buckets[a]; });
+  var clusters = []; // {r,g,b,count}
+  sorted.forEach(function(key){
+    var p = key.split(',').map(Number);
+    var cnt = buckets[key];
+    var best = null, bestD = Infinity;
+    for(var k = 0; k < clusters.length; k++){
+      var dr = p[0]-clusters[k].r, dg = p[1]-clusters[k].g, db = p[2]-clusters[k].b;
+      var dd = dr*dr + dg*dg + db*db;
+      if(dd < bestD){ bestD = dd; best = clusters[k]; }
     }
-    if(!tooClose) unique.push(parts);
-  }
+    if(best && bestD <= MERGE_SQ){
+      var nc = best.count + cnt;
+      best.r = (best.r * best.count + p[0] * cnt) / nc;
+      best.g = (best.g * best.count + p[1] * cnt) / nc;
+      best.b = (best.b * best.count + p[2] * cnt) / nc;
+      best.count = nc;
+    } else {
+      clusters.push({ r: p[0], g: p[1], b: p[2], count: cnt });
+    }
+  });
+
+  // Stap 3: ruis eruit (< 1,5% aandeel), sorteer op aandeel, max 6 chips
+  clusters = clusters
+    .filter(function(c){ return c.count / total >= 0.015; })
+    .sort(function(a, b2){ return b2.count - a.count; })
+    .slice(0, 6);
+
   var html2 = '';
-  for(var u = 0; u < unique.length; u++){
-    var c = unique[u];
-    var hex = '#' + _hex(c[0]) + _hex(c[1]) + _hex(c[2]);
-    html2 += '<button class="le-color-chip" data-r="'+c[0]+'" data-g="'+c[1]+'" data-b="'+c[2]+'" data-hex="'+hex+'" title="'+hex+'" style="background:'+hex+'"></button>';
-  }
+  clusters.forEach(function(c){
+    var r2 = Math.round(c.r), g2 = Math.round(c.g), b2 = Math.round(c.b);
+    // Snap bijna-wit/bijna-zwart naar zuiver wit/zwart (kwantisatie-artefact)
+    if(r2 >= 232 && g2 >= 232 && b2 >= 232){ r2 = g2 = b2 = 255; }
+    else if(r2 <= 18 && g2 <= 18 && b2 <= 18){ r2 = g2 = b2 = 0; }
+    var hex = '#' + _hex(r2) + _hex(g2) + _hex(b2);
+    var pct = Math.round((c.count / total) * 100);
+    html2 += '<button class="le-color-chip" data-r="'+r2+'" data-g="'+g2+'" data-b="'+b2+'" data-hex="'+hex+'" data-tol="60" title="'+hex.toUpperCase()+' · '+pct+'%" style="background:'+hex+'"></button>';
+  });
   container.innerHTML = html2;
   container.querySelectorAll('.le-color-chip').forEach(function(chip){
     chip.onclick = function(){
       _pickedRGB = { r: parseInt(chip.dataset.r,10), g: parseInt(chip.dataset.g,10), b: parseInt(chip.dataset.b,10), hex: chip.dataset.hex };
+      // Chip = cluster: vervang met ruime tolerantie zodat de hele
+      // kleurgroep (incl. anti-alias tinten) in één keer meegaat
+      _pickedTol = parseInt(chip.dataset.tol, 10) || 60;
       _updatePickedSwatch();
       _liveColor();
     };
@@ -602,8 +645,9 @@ function _wireEvents(){
   _previewEl.onclick = function(e){
     if(_activeTool !== 'color' || !_pickMode) return;
     var rect = _previewEl.getBoundingClientRect();
-    var scaleX = _workCanvas.width / _previewEl.width;
-    var scaleY = _workCanvas.height / _previewEl.height;
+    // rect = CSS-maat; canvas-attr kan dpr× groter zijn — map via rect
+    var scaleX = _workCanvas.width / Math.max(rect.width, 1);
+    var scaleY = _workCanvas.height / Math.max(rect.height, 1);
     var px = Math.floor((e.clientX - rect.left) * scaleX);
     var py = Math.floor((e.clientY - rect.top) * scaleY);
     px = Math.max(0, Math.min(px, _workCanvas.width - 1));
@@ -611,6 +655,7 @@ function _wireEvents(){
     var d = _workCtx.getImageData(px, py, 1, 1).data;
     if(d[3] < 10) return;
     _pickedRGB = {r: d[0], g: d[1], b: d[2], hex: _hexFromRgb(d[0],d[1],d[2]) };
+    _pickedTol = 40;
     _pickMode = false;
     _previewEl.style.cursor = '';
     _updatePickedSwatch();
@@ -656,8 +701,8 @@ function _showLoupe(e){
   var mx = e.clientX, my = e.clientY;
   _loupeCanvas.style.left = (mx + 20) + 'px';
   _loupeCanvas.style.top = (my - 140) + 'px';
-  var scX = _workCanvas.width / _previewEl.width;
-  var scY = _workCanvas.height / _previewEl.height;
+  var scX = _workCanvas.width / Math.max(rect.width, 1);
+  var scY = _workCanvas.height / Math.max(rect.height, 1);
   var srcX = Math.floor((mx - rect.left) * scX);
   var srcY = Math.floor((my - rect.top) * scY);
   var half = 6;
@@ -786,7 +831,7 @@ function applyColorReplace(){
   if(_isVector && _fabricObj){
     // Vector: use recolorSvgPaths from app.js (modifies group + _svgSource)
     if(typeof recolorSvgPaths === 'function'){
-      recolorSvgPaths(_fabricObj, oldHex, replHex, 40);
+      recolorSvgPaths(_fabricObj, oldHex, replHex, _pickedTol);
     }
     _modified = true;
     _refreshVectorPreview();
@@ -799,7 +844,8 @@ function applyColorReplace(){
 
   // Raster path
   var picked = _pickedRGB;
-  var result = _buildColorReplace(_workCanvas, picked, replHex, 40);
+  var tol = _pickedTol;
+  var result = _buildColorReplace(_workCanvas, picked, replHex, tol);
   _workCtx.drawImage(result, 0, 0);
   _modified = true;
   _pickedRGB = null;
@@ -808,7 +854,7 @@ function applyColorReplace(){
   _extractColors();
   // If we have a pre-outline snapshot, update it too
   if(_preOutlineCanvas){
-    var prResult = _buildColorReplace(_preOutlineCanvas, picked, replHex, 40);
+    var prResult = _buildColorReplace(_preOutlineCanvas, picked, replHex, tol);
     var pctx = _preOutlineCanvas.getContext('2d');
     pctx.drawImage(prResult, 0, 0);
   }
@@ -914,6 +960,95 @@ function _updateSvgSourceAllColor(hexColor){
 /* ══════════════════════════════════════════
    TOOL 2: ACHTERGROND VERWIJDEREN (bitmap only)
    ══════════════════════════════════════════ */
+
+/* ── Witte achtergrond verwijderen — globaal, ook binnenin letters ──
+   Soft chroma-key op wit: pixels dicht bij wit worden transparant met
+   een smoothstep-overgang (gladde randen i.p.v. rafels), en de witte
+   bijmenging wordt uit randpixels ge-unblend zodat er geen witte halo
+   achterblijft. threshPct = afstand tot wit (in %) die volledig
+   transparant wordt; 2.2× die afstand is volledig dekkend. */
+function _buildWhiteRemove(src, threshPct){
+  var w = src.width, h = src.height;
+  var c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  var ctx = c.getContext('2d');
+  ctx.drawImage(src, 0, 0);
+  var data = ctx.getImageData(0, 0, w, h);
+  var px = data.data;
+  var MAXD = Math.sqrt(3) * 255;
+  var t1 = Math.max(0.005, threshPct / 100);
+  var t2 = Math.min(1, t1 * 3); // brede overgang: 50%-mengpixels worden semi + ge-unblend (geen halo)
+  for(var i = 0; i < px.length; i += 4){
+    var a = px[i+3];
+    if(a === 0) continue;
+    var dr = 255 - px[i], dg = 255 - px[i+1], db = 255 - px[i+2];
+    var d = Math.sqrt(dr*dr + dg*dg + db*db) / MAXD;
+    if(d >= t2) continue; // ver genoeg van wit — ongemoeid laten
+    var f;
+    if(d <= t1) f = 0;
+    else { f = (d - t1) / (t2 - t1); f = f * f * (3 - 2 * f); } // smoothstep
+    var na = Math.round(a * f);
+    if(na > 0 && f > 0){
+      // Unblend van wit: verwijder de witte bijmenging uit de kleur
+      px[i]   = Math.max(0, Math.min(255, Math.round((px[i]   - 255 * (1 - f)) / f)));
+      px[i+1] = Math.max(0, Math.min(255, Math.round((px[i+1] - 255 * (1 - f)) / f)));
+      px[i+2] = Math.max(0, Math.min(255, Math.round((px[i+2] - 255 * (1 - f)) / f)));
+    }
+    px[i+3] = na;
+  }
+  ctx.putImageData(data, 0, 0);
+  return c;
+}
+
+function previewWhiteRemove(){
+  var s = document.getElementById('leWhiteThresh');
+  var sv = document.getElementById('leWhiteThreshVal');
+  if(s && sv) sv.textContent = s.value;
+  _livePreview();
+}
+
+function _liveWhiteRemove(){
+  if(!_workCanvas) return;
+  var s = document.getElementById('leWhiteThresh');
+  var t = parseFloat(s ? s.value : 12) || 12;
+  var tmp = _buildWhiteRemove(_workCanvas, t);
+  _drawPreview(tmp);
+}
+
+function applyWhiteRemove(){
+  if(!_workCanvas) return;
+  var s = document.getElementById('leWhiteThresh');
+  var t = parseFloat(s ? s.value : 12) || 12;
+  var status = document.getElementById('leBgStatus');
+
+  if(_hasOutline && _preOutlineCanvas){
+    // Outline al toegepast: wit verwijderen uit de pre-outline bron
+    // en de outline daarna opnieuw opbouwen (anders wist dit de outline)
+    var cleaned = _buildWhiteRemove(_preOutlineCanvas, t);
+    _preOutlineCanvas.width = cleaned.width;
+    _preOutlineCanvas.height = cleaned.height;
+    _preOutlineCanvas.getContext('2d').drawImage(cleaned, 0, 0);
+    var scaledW = _isVector ? (_outlineWidth * _vectorMult / 3) : _outlineWidth;
+    var rebuilt = _buildOutline(_preOutlineCanvas, scaledW, _outlineColor);
+    _workCanvas.width = rebuilt.width;
+    _workCanvas.height = rebuilt.height;
+    _workCtx = _workCanvas.getContext('2d');
+    _workCtx.drawImage(rebuilt, 0, 0);
+  } else {
+    var result = _buildWhiteRemove(_workCanvas, t);
+    _workCanvas.width = result.width;
+    _workCanvas.height = result.height;
+    _workCtx = _workCanvas.getContext('2d');
+    _workCtx.drawImage(result, 0, 0);
+  }
+
+  _modified = true;
+  _drawPreview(_workCanvas);
+  _extractColors();
+  if(status) status.textContent = 'Wit verwijderd (drempel ' + t + ')';
+  if(window.toast) window.toast('Witte achtergrond verwijderd', 'success', 1500);
+}
+
 var _bgRemoveLib = null;
 
 async function applyBgRemove(){
@@ -1726,6 +1861,7 @@ window.gsbLogoEditor = {
   makeAllBlack: makeAllBlack, makeAllWhite: makeAllWhite,
   applyUpscale: applyUpscale, onSharpChange: onSharpChange,
   applyBgRemove: applyBgRemove,
+  applyWhiteRemove: applyWhiteRemove, previewWhiteRemove: previewWhiteRemove,
 };
 
 })();

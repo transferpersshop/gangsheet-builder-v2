@@ -935,7 +935,7 @@ window.addEventListener('load', ()=>{
         <tr><td style="padding:3px 8px 3px 0;color:var(--muted)">0</td><td style="padding:3px 0" data-i18n="zoomFit">Passend</td></tr>
       </table>
     </div>
-    <p class="version-tag">v2.19.0 · 12-07-2026</p>
+    <p class="version-tag">v2.20.0 · 12-07-2026</p>
   </div>
 </div>
 
@@ -1177,10 +1177,13 @@ window.addEventListener('load', ()=>{
   .le-tool-btn:hover svg{opacity:.9}
   .le-tool-btn.active{background:linear-gradient(135deg,rgba(105,70,200,.1),rgba(29,154,175,.1));color:var(--primary)}
   .le-tool-btn.active svg{opacity:1}
-  .le-main{flex:1;min-width:0;display:flex;flex-direction:column;overflow-y:auto;max-height:72vh}
-  /* Preview area */
-  .le-preview-wrap{background:var(--bg);padding:16px;display:flex;align-items:center;justify-content:center;min-height:160px;position:relative;border-bottom:1px solid var(--border)}
-  .le-preview-wrap canvas{max-width:100%;max-height:420px;border-radius:4px}
+  .le-main{flex:1;min-width:0;display:flex;flex-direction:column;overflow-y:auto;max-height:78vh}
+  /* Preview area — achtergrond (checker/zwart) loopt over de VOLLE breedte */
+  .le-preview-wrap{padding:12px;display:flex;align-items:center;justify-content:center;height:clamp(280px,46vh,560px);flex-shrink:0;position:relative;border-bottom:1px solid var(--border);overflow:hidden}
+  .le-preview-wrap.le-checker{background-color:#fff;background-image:linear-gradient(45deg,#e8e8e8 25%,transparent 25%),linear-gradient(-45deg,#e8e8e8 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#e8e8e8 75%),linear-gradient(-45deg,transparent 75%,#e8e8e8 75%);background-size:16px 16px;background-position:0 0,0 8px,8px -8px,-8px 0}
+  .le-preview-wrap.le-dark{background:#000}
+  .le-preview-wrap.le-dark .le-file-name{color:#fff;opacity:.75}
+  .le-preview-wrap canvas{max-width:100%;max-height:100%}
   .le-file-name{position:absolute;top:8px;left:12px;font-size:.64rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;opacity:.6}
   /* Tool panels */
   .le-tool-panel{display:none;padding:16px 18px;border-bottom:1px solid var(--border)}
@@ -1245,7 +1248,7 @@ window.addEventListener('load', ()=>{
       <!-- ── Main content ── -->
       <div class="le-main">
         <!-- Preview -->
-        <div class="le-preview-wrap">
+        <div class="le-preview-wrap le-checker" id="lePreviewWrap">
           <span class="le-file-name" id="leFileName">Logo</span>
           <canvas id="lePreview"></canvas>
         </div>
@@ -1293,8 +1296,18 @@ window.addEventListener('load', ()=>{
 
         <!-- ═══ 2. BG Remove (bitmap only) ═══ -->
         <div class="le-tool-panel" id="lePanel_bgremove">
-          <h4>Achtergrond verwijderen</h4>
-          <button class="le-btn le-btn-sub" id="leBgRemoveBtn" onclick="gsbLogoEditor.applyBgRemove()" style="width:100%">Achtergrond verwijderen</button>
+          <h4>Witte achtergrond verwijderen</h4>
+          <div class="le-row">
+            <label>Drempel</label>
+            <input type="range" id="leWhiteThresh" min="2" max="30" step="1" value="12" oninput="gsbLogoEditor.previewWhiteRemove()">
+            <span class="le-val" id="leWhiteThreshVal">12</span>
+          </div>
+          <p style="font-size:.72rem;color:var(--muted);margin:0 0 10px">Verwijdert wit overal — ook binnenin letters — met gladde randen. Schuif de drempel hoger als er witte resten achterblijven.</p>
+          <button class="le-btn le-btn-sub" id="leWhiteRemoveBtn" onclick="gsbLogoEditor.applyWhiteRemove()" style="width:100%">Verwijder wit</button>
+          <div style="border-top:1px solid var(--border);margin-top:14px;padding-top:12px">
+            <h4 style="margin:0 0 8px">AI-verwijdering (foto's / gekleurde achtergrond)</h4>
+            <button class="le-btn le-btn-pick" id="leBgRemoveBtn" onclick="gsbLogoEditor.applyBgRemove()" style="width:100%">AI achtergrond verwijderen</button>
+          </div>
           <div class="le-status" id="leBgStatus"></div>
         </div>
 

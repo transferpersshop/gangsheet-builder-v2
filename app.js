@@ -382,7 +382,9 @@ const undoRedoStack = {
   redo: [],
   _statsDirty: true,
   _statsCache: null,
-  maxStates: 30,
+  // 15 stappen: elke stap bevat een volledige canvas-serialisatie (incl.
+  // base64-beelddata van rasterlogo's) — 15 i.p.v. 30 halveert het geheugen
+  maxStates: 15,
 
   push(state) {
     this.undo.push(state);
