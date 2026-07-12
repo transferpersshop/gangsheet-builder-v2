@@ -1,6 +1,6 @@
 /* ================================================================
    logo-editor.js — Per-logo bewerkingsmodal voor Gang Sheet Builder
-   v2.20.0 — retina-scherpe preview met vol-brede achtergrond,
+   v2.21.0 — retina-scherpe preview met vol-brede achtergrond,
    witte-achtergrond verwijdering (globaal + de-fringe),
    kleurclustering (vectorizer-stijl), SVG-natieve outline
    ================================================================ */
@@ -427,6 +427,7 @@ function _livePreview(){
     if(_activeTool === 'outline') _liveOutline();
     else if(_activeTool === 'color') _liveColor();
     else if(_activeTool === 'bgremove' && _isRaster) _liveWhiteRemove();
+    else if(_activeTool === 'upscale' && _isRaster) _liveUpscale();
     else _drawPreview(_workCanvas);
   }, 40);
 }
@@ -480,7 +481,8 @@ function selectTool(tool){
   });
   if(_previewEl) _previewEl.style.cursor = '';
   if(tool === 'color'){ _updatePickedSwatch(); _extractColors(); }
-  _drawPreview(_workCanvas);
+  // Toon direct de live preview van de gekozen tool (outline/verscherpen/wit)
+  _livePreview();
 }
 
 function _resetToolPanels(){
@@ -1413,6 +1415,7 @@ function _replaceVectorWithOutlinedSvg(obj, res){
       canvas.setActiveObject(group);
       canvas.requestRenderAll();
       if(typeof window.syncMmFromPx === 'function') window.syncMmFromPx(group);
+      if(typeof window.invalidateThumb === 'function') window.invalidateThumb(group._originalId || group._id);
       if(typeof window.renderItemList === 'function') window.renderItemList();
       if(typeof window.renderSelectedPanel === 'function') window.renderSelectedPanel();
     }
@@ -1613,7 +1616,38 @@ function onSharpChange(){
   var s = document.getElementById('leSharpAmount');
   var sv = document.getElementById('leSharpVal');
   if(s && sv) sv.textContent = parseFloat(s.value).toFixed(1);
+  _livePreview();
 }
+
+/* Live preview van upscale + verscherpen — op gecapte resolutie zodat de
+   slider vloeiend blijft; de echte upscale gebeurt pas bij de knop. */
+function _liveUpscale(){
+  if(!_workCanvas) return;
+  var sel = document.getElementById('leUpFactor');
+  var factor = parseInt(sel ? sel.value : 2, 10) || 2;
+  var sharp = document.getElementById('leSharpAmount');
+  var sharpVal = parseFloat(sharp ? sharp.value : 0.5) || 0;
+  var ow = _workCanvas.width, oh = _workCanvas.height;
+  var cap = 1200;
+  var nw = ow * factor, nh = oh * factor;
+  var s = Math.min(1, cap / Math.max(nw, nh, 1));
+  nw = Math.max(1, Math.round(nw * s));
+  nh = Math.max(1, Math.round(nh * s));
+  var tmp = document.createElement('canvas');
+  tmp.width = nw; tmp.height = nh;
+  var tctx = tmp.getContext('2d');
+  tctx.imageSmoothingEnabled = true;
+  tctx.imageSmoothingQuality = 'high';
+  tctx.drawImage(_workCanvas, 0, 0, nw, nh);
+  if(sharpVal > 0){
+    var data = tctx.getImageData(0, 0, nw, nh);
+    _unsharpMask(data, nw, nh, sharpVal);
+    tctx.putImageData(data, 0, 0);
+  }
+  _drawPreview(tmp);
+}
+
+function previewUpscale(){ _livePreview(); }
 
 /* Raster-bewerking (outline, kleur, upscale) doorvoeren naar alle
    kopieën van hetzelfde logo — element-swap in-place, posities blijven. */
@@ -1765,6 +1799,7 @@ function apply(){
           canvas.setActiveObject(newImg);
           canvas.requestRenderAll();
           if(typeof window.syncMmFromPx === 'function') window.syncMmFromPx(newImg);
+          if(typeof window.invalidateThumb === 'function') window.invalidateThumb(newImg._originalId || newImg._id);
           if(typeof window.renderItemList === 'function') window.renderItemList();
           if(typeof window.renderSelectedPanel === 'function') window.renderSelectedPanel();
         }
@@ -1779,6 +1814,7 @@ function apply(){
     _fabricObj.dirty = true;
     _fabricObj._recolored = true;
     if(typeof window.autoDarkBgForWhiteLogo === 'function') window.autoDarkBgForWhiteLogo(_fabricObj);
+    if(typeof window.invalidateThumb === 'function') window.invalidateThumb(_fabricObj._originalId || _fabricObj._id);
     var canvas = window._gsbCanvas;
     if(canvas){
       canvas.requestRenderAll();
@@ -1840,6 +1876,7 @@ function apply(){
       canvas.setActiveObject(newImg);
       canvas.requestRenderAll();
       if(typeof window.syncMmFromPx === 'function') window.syncMmFromPx(newImg);
+      if(typeof window.invalidateThumb === 'function') window.invalidateThumb(newImg._originalId || newImg._id);
       if(typeof window.renderItemList === 'function') window.renderItemList();
       if(typeof window.renderSelectedPanel === 'function') window.renderSelectedPanel();
     }
@@ -1860,6 +1897,7 @@ window.gsbLogoEditor = {
   startPick: startPick, applyColorReplace: applyColorReplace,
   makeAllBlack: makeAllBlack, makeAllWhite: makeAllWhite,
   applyUpscale: applyUpscale, onSharpChange: onSharpChange,
+  previewUpscale: previewUpscale,
   applyBgRemove: applyBgRemove,
   applyWhiteRemove: applyWhiteRemove, previewWhiteRemove: previewWhiteRemove,
 };
