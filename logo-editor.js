@@ -1,6 +1,7 @@
 /* ================================================================
    logo-editor.js — Per-logo bewerkingsmodal voor Gang Sheet Builder
-   v2.17.0 — high-res vector preview, raster outline export, TPS styling
+   v2.18.0 — echte vector preview (SVG-bron), SVG-natieve outline die
+   in de PDF-export (drukproef + print ready) behouden blijft
    ================================================================ */
 (function(){
 'use strict';
@@ -37,9 +38,62 @@ var _outlineWidth = 0;         // saved slider value
 var _outlineColor = '#FFFFFF'; // saved outline color
 var _vectorMult = 3;           // multiplier used for vector→canvas rendering
 
+// Token to cancel stale async SVG preview renders
+var _svgRenderToken = 0;
+
 /* ══════════ helpers ══════════ */
 function _hex(n){ return n.toString(16).padStart(2,'0'); }
 function _hexFromRgb(r,g,b){ return '#'+_hex(r)+_hex(g)+_hex(b); }
+
+// Get the SVG source for a fabric object (own property or store fallback)
+function _getSvgSrc(obj){
+  if(!obj) return null;
+  if(obj._svgSource) return obj._svgSource;
+  if(obj._originalId && typeof svgSourceStore !== 'undefined' && svgSourceStore.get)
+    return svgSourceStore.get(obj._originalId) || null;
+  return null;
+}
+
+/* Render an SVG source string to a canvas via the browser's native SVG
+   renderer — this shows the REAL vector file (incl. gradients/filters die
+   Fabric niet altijd correct rendert). Async: cb(canvas|null). */
+function _renderSvgSourceToCanvas(svgStr, targetW, cb){
+  try{
+    var parser = new DOMParser();
+    var doc = parser.parseFromString(svgStr, 'image/svg+xml');
+    if(doc.querySelector('parsererror')){ cb(null); return; }
+    var root = doc.documentElement;
+    if(!root.getAttribute('viewBox')){
+      var aw = parseFloat(root.getAttribute('width')) || 100;
+      var ah = parseFloat(root.getAttribute('height')) || 100;
+      root.setAttribute('viewBox', '0 0 ' + aw + ' ' + ah);
+    }
+    var vb = root.getAttribute('viewBox').split(/[\s,]+/).map(Number);
+    var vbW = vb[2] || 100, vbH = vb[3] || 100;
+    var w = Math.max(2, Math.round(targetW));
+    var h = Math.max(2, Math.round(targetW * vbH / vbW));
+    if(h > 4000){ h = 4000; w = Math.max(2, Math.round(h * vbW / vbH)); }
+    root.setAttribute('width', String(w));
+    root.setAttribute('height', String(h));
+    root.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+    if(!root.getAttribute('xmlns')) root.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    var str = new XMLSerializer().serializeToString(root);
+    var blob = new Blob([str], { type: 'image/svg+xml;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var img = new Image();
+    img.onload = function(){
+      try{
+        var c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        URL.revokeObjectURL(url);
+        cb(c);
+      }catch(e){ URL.revokeObjectURL(url); cb(null); }
+    };
+    img.onerror = function(){ URL.revokeObjectURL(url); cb(null); };
+    img.src = url;
+  }catch(e){ cb(null); }
+}
 
 // Approximate RGB→CMYK (no ICC, formula-based)
 function _rgbToCmyk(r,g,b){
@@ -74,7 +128,7 @@ function open(fabricObj){
     // Save original state for cancel/undo
     _vectorOrigState = _saveVectorState(fabricObj);
 
-    // Create preview canvas from group rendering at high resolution
+    // Fast initial preview from the Fabric group rendering
     var displayW = fabricObj.width * (fabricObj.scaleX || 1);
     _vectorMult = Math.max(3, Math.ceil(2000 / Math.max(displayW, 1)));
     var vecCanvas = fabricObj.toCanvasElement(_vectorMult);
@@ -89,6 +143,28 @@ function open(fabricObj){
     _workCtx.drawImage(trimmed, 0, 0);
 
     _origImg = null; // not used for vectors
+
+    // Upgrade preview to the REAL vector file: render the SVG source with the
+    // browser's native SVG renderer (never a rasterized fabric approximation)
+    var svgSrc0 = _getSvgSrc(fabricObj);
+    if(svgSrc0){
+      var token0 = ++_svgRenderToken;
+      _renderSvgSourceToCanvas(svgSrc0, 2000, function(c){
+        if(!c || token0 !== _svgRenderToken || _fabricObj !== fabricObj || !_isVector || !_workCanvas) return;
+        var tr = _trimCanvas(c);
+        _origCanvasW = tr.width;
+        _origCanvasH = tr.height;
+        _workCanvas.width = tr.width;
+        _workCanvas.height = tr.height;
+        _workCtx = _workCanvas.getContext('2d');
+        _workCtx.drawImage(tr, 0, 0);
+        var dW = fabricObj.width * (fabricObj.scaleX || 1);
+        _vectorMult = Math.max(1, tr.width / Math.max(dW, 1));
+        _drawPreview(_workCanvas);
+        var info2 = document.getElementById('leUpInfo');
+        if(info2) info2.textContent = _origCanvasW + '×' + _origCanvasH + ' px (vector)';
+      });
+    }
   } else {
     // ── Raster path ──
     _vectorOrigState = null;
@@ -206,11 +282,31 @@ function _restoreVectorState(group, state){
 /* ══════════ Refresh vector preview ══════════ */
 function _refreshVectorPreview(){
   if(!_isVector || !_fabricObj) return;
-  var displayW = _fabricObj.width * (_fabricObj.scaleX || 1);
+  var obj = _fabricObj;
+  // Prefer the real SVG source (kept in sync by recolor functions) —
+  // the preview always shows the vector file, not a fabric raster approximation
+  var svgSrc = _getSvgSrc(obj);
+  if(svgSrc){
+    var token = ++_svgRenderToken;
+    _renderSvgSourceToCanvas(svgSrc, 2000, function(c){
+      if(!c || token !== _svgRenderToken || _fabricObj !== obj || !_isVector || !_workCanvas) return;
+      var tr = _trimCanvas(c);
+      var dW = obj.width * (obj.scaleX || 1);
+      _vectorMult = Math.max(1, tr.width / Math.max(dW, 1));
+      _applyVectorWork(tr);
+    });
+    return;
+  }
+  var displayW = obj.width * (obj.scaleX || 1);
   var mult = Math.max(3, Math.ceil(2000 / Math.max(displayW, 1)));
-  var vecCanvas = _fabricObj.toCanvasElement(mult);
+  var vecCanvas = obj.toCanvasElement(mult);
   var trimmed = _trimCanvas(vecCanvas);
+  _applyVectorWork(trimmed);
+}
 
+/* Write a freshly-rendered vector canvas into _workCanvas,
+   re-applying the outline preview if one is active. */
+function _applyVectorWork(trimmed){
   if(_hasOutline && _outlineWidth > 0){
     // Update pre-outline canvas with the freshly-rendered group
     if(!_preOutlineCanvas) _preOutlineCanvas = document.createElement('canvas');
@@ -259,13 +355,35 @@ function _trimCanvas(src){
 }
 
 /* ══════════ Preview — always full width, max height ══════════ */
+
+/* Does the artwork contain (near-)white pixels? Sampled at max 64px. */
+function _containsWhite(src){
+  try{
+    var s = 64 / Math.max(src.width, src.height, 1);
+    var w = Math.max(1, Math.round(src.width * s));
+    var h = Math.max(1, Math.round(src.height * s));
+    var c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    var ctx = c.getContext('2d');
+    ctx.drawImage(src, 0, 0, w, h);
+    var d = ctx.getImageData(0, 0, w, h).data;
+    var white = 0, opaque = 0;
+    for(var i = 0; i < d.length; i += 4){
+      if(d[i+3] < 40) continue;
+      opaque++;
+      if(d[i] >= 245 && d[i+1] >= 245 && d[i+2] >= 245) white++;
+    }
+    return opaque > 0 && (white / opaque) > 0.02;
+  }catch(e){ return false; }
+}
+
 function _drawPreview(sourceCanvas){
   if(!_previewEl) return;
   var src = sourceCanvas || _workCanvas;
   if(!src) return;
   var wrap = _previewEl.parentElement;
   var maxW = (wrap ? wrap.clientWidth : 560) - 32;
-  var maxH = 360;
+  var maxH = 420;
   var scale = maxW / src.width;
   if(src.height * scale > maxH) scale = maxH / src.height;
   var pw = Math.round(src.width * scale);
@@ -273,7 +391,13 @@ function _drawPreview(sourceCanvas){
   _previewEl.width = pw;
   _previewEl.height = ph;
   var ctx = _previewEl.getContext('2d');
-  _drawCheckerboard(ctx, pw, ph);
+  // Logo's met wit standaard op zwarte achtergrond tonen
+  if(_containsWhite(src)){
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, pw, ph);
+  } else {
+    _drawCheckerboard(ctx, pw, ph);
+  }
   ctx.drawImage(src, 0, 0, pw, ph);
 }
 
@@ -1002,6 +1126,226 @@ function _buildOutline(src, width, color){
   return tmpC;
 }
 
+/* ── SVG-natieve outline ─────────────────────────────────────
+   Bouwt een outline IN de SVG-bron zelf: een gekloonde laag met dikke
+   ronde stroke achter de originele content. Zo blijft het bestand
+   vector, en neemt de PDF-export (Track 1, svg2pdf) de outline mee.
+   outlinePx  = outline-dikte in pixels van het referentie-canvas
+   refCanvasW = breedte van dat canvas (voor px → viewBox-units)
+   Returns { svg, ratioW, ratioH } of null bij falen. */
+function _applySvgOutlineToSource(svgStr, outlinePx, refCanvasW, color){
+  try{
+    var parser = new DOMParser();
+    var doc = parser.parseFromString(svgStr, 'image/svg+xml');
+    if(doc.querySelector('parsererror')) return null;
+    var root = doc.documentElement;
+    if(!root.getAttribute('viewBox')){
+      var aw = parseFloat(root.getAttribute('width')) || 100;
+      var ah = parseFloat(root.getAttribute('height')) || 100;
+      root.setAttribute('viewBox', '0 0 ' + aw + ' ' + ah);
+    }
+    var vb = root.getAttribute('viewBox').split(/[\s,]+/).map(Number);
+    var vbX = vb[0] || 0, vbY = vb[1] || 0, vbW = vb[2] || 100, vbH = vb[3] || 100;
+    var w = outlinePx * vbW / Math.max(refCanvasW, 1); // dikte in user units
+    if(!(w > 0)) return null;
+
+    var SKIP = { defs:1, metadata:1, title:1, desc:1, style:1, script:1,
+                 symbol:1, marker:1, clippath:1, mask:1, lineargradient:1,
+                 radialgradient:1, pattern:1, filter:1 };
+    var SVGNS = 'http://www.w3.org/2000/svg';
+
+    // Collect top-level graphic elements
+    var kids = [];
+    var i, n;
+    for(i = 0; i < root.childNodes.length; i++){
+      n = root.childNodes[i];
+      if(n.nodeType === 1 && !SKIP[n.nodeName.toLowerCase()]) kids.push(n);
+    }
+    if(!kids.length) return null;
+
+    // Clone content into an outline layer
+    var outlineG = doc.createElementNS(SVGNS, 'g');
+    outlineG.setAttribute('data-gsb-outline', '1');
+    kids.forEach(function(k){ outlineG.appendChild(k.cloneNode(true)); });
+
+    // Force solid outline paint on every descendant
+    var all = [outlineG].concat(Array.prototype.slice.call(outlineG.querySelectorAll('*')));
+    all.forEach(function(el){
+      var tag = el.nodeName.toLowerCase();
+      if(SKIP[tag]) return;
+      var style = el.getAttribute('style');
+      if(style){
+        style = style.replace(/(fill|stroke|stroke-width|fill-opacity|stroke-opacity|paint-order|opacity)\s*:\s*[^;]+;?/gi, '');
+        if(style.trim()) el.setAttribute('style', style);
+        else el.removeAttribute('style');
+      }
+      var isContainer = (tag === 'g' || tag === 'svg' || tag === 'a' || tag === 'switch');
+      var fillAttr = el.getAttribute('fill');
+      // Alleen expliciete fills vervangen; 'none' blijft none (lijn-art krijgt
+      // zijn outline via de stroke), containers blijven onaangeroerd zodat
+      // overerving (bijv. fill="none" op een groep) intact blijft.
+      if(!isContainer && fillAttr && fillAttr !== 'none') el.setAttribute('fill', color);
+      var prevSw = parseFloat(el.getAttribute('stroke-width'));
+      var strokeAttr = el.getAttribute('stroke');
+      var hadStroke = strokeAttr && strokeAttr !== 'none';
+      var base = (hadStroke && !isNaN(prevSw)) ? prevSw : 0;
+      el.setAttribute('stroke', color);
+      el.setAttribute('stroke-width', String(base + 2 * w));
+      el.setAttribute('stroke-linejoin', 'round');
+      el.setAttribute('stroke-linecap', 'round');
+      el.removeAttribute('fill-opacity');
+      el.removeAttribute('stroke-opacity');
+      el.removeAttribute('filter');
+      if(el.getAttribute('opacity')) el.setAttribute('opacity', '1');
+    });
+
+    // Insert BEHIND the original content (before first graphic element)
+    root.insertBefore(outlineG, kids[0]);
+
+    // Expand viewBox so the outline is not clipped
+    var pad = w * 1.05;
+    var nX = vbX - pad, nY = vbY - pad, nW = vbW + 2 * pad, nH = vbH + 2 * pad;
+    root.setAttribute('viewBox', nX + ' ' + nY + ' ' + nW + ' ' + nH);
+
+    // Scale physical width/height attributes proportionally (keep units)
+    var scaleAttr = function(val, ratio){
+      var m = /^\s*([\d.]+)\s*([a-z%]*)\s*$/i.exec(val || '');
+      if(!m) return null;
+      return (parseFloat(m[1]) * ratio) + (m[2] || '');
+    };
+    var wAttr = root.getAttribute('width');
+    var hAttr = root.getAttribute('height');
+    if(wAttr){ var nwA = scaleAttr(wAttr, nW / vbW); if(nwA) root.setAttribute('width', nwA); }
+    if(hAttr){ var nhA = scaleAttr(hAttr, nH / vbH); if(nhA) root.setAttribute('height', nhA); }
+
+    return {
+      svg: new XMLSerializer().serializeToString(root),
+      ratioW: nW / vbW,
+      ratioH: nH / vbH
+    };
+  }catch(e){
+    console.warn('[LE] SVG outline build failed:', e);
+    return null;
+  }
+}
+
+/* Vervang een vector fabric-group door een nieuwe group geladen uit de
+   ge-outlinede SVG. Vector blijft vector; _svgSource + store worden
+   bijgewerkt zodat de PDF-export (Track 1) de outline meeneemt. */
+function _replaceVectorWithOutlinedSvg(obj, res){
+  fabric.loadSVGFromString(res.svg, function(objects, options){
+    var group = fabric.util.groupSVGElements(objects, options);
+    group.objectCaching = false;
+    if(group._objects) group._objects.forEach(function(ch){ ch.objectCaching = false; });
+
+    var newMmW = (obj._mmW || 50) * res.ratioW;
+    var newMmH = (obj._mmH || 50) * res.ratioH;
+    var pxPerMm = window._displayPxPerMm || 5;
+
+    group.set({
+      originX: 'left', originY: 'top',
+      left: obj.left, top: obj.top, angle: obj.angle,
+      flipX: !!obj.flipX, flipY: !!obj.flipY,
+      scaleX: (newMmW * pxPerMm) / group.width,
+      scaleY: (newMmH * pxPerMm) / group.height,
+    });
+
+    group._id = obj._id;
+    group._originalId = obj._originalId;
+    group._name = obj._name;
+    group._naturalW = group.width;
+    group._naturalH = group.height;
+    group._mmW = newMmW;
+    group._mmH = newMmH;
+    group._mmLeft = obj._mmLeft;
+    group._mmTop = obj._mmTop;
+    group._svgSource = res.svg;
+    group._recolored = true;        // export: prefer this sample, skip embedPdf
+    group._hasAppliedOutline = true;
+    if(obj._vectorOrigin) group._vectorOrigin = obj._vectorOrigin;
+    if(obj._isFillTile) group._isFillTile = obj._isFillTile;
+    if(group._originalId && typeof svgSourceStore !== 'undefined'){
+      svgSourceStore.set(group._originalId, res.svg);
+    }
+
+    var canvas = window._gsbCanvas;
+    if(canvas){
+      if(typeof window.attachObjListeners === 'function') window.attachObjListeners(group);
+      canvas.remove(obj);
+      canvas.add(group);
+      canvas.setActiveObject(group);
+      canvas.requestRenderAll();
+      if(typeof window.syncMmFromPx === 'function') window.syncMmFromPx(group);
+      if(typeof window.renderItemList === 'function') window.renderItemList();
+      if(typeof window.renderSelectedPanel === 'function') window.renderSelectedPanel();
+    }
+    _propagateOutlineToSiblings(group, res);
+    if(typeof window.autoDarkBgForWhiteLogo === 'function') window.autoDarkBgForWhiteLogo(group);
+    if(window.toast) window.toast('Outline toegepast — vector behouden', 'success');
+  });
+}
+
+/* Outline doorvoeren naar alle kopieën van hetzelfde logo, zodat
+   canvas-weergave en PDF-export consistent blijven. */
+function _propagateOutlineToSiblings(primary, res){
+  var canvas = window._gsbCanvas;
+  if(!canvas) return;
+  var oid = primary._originalId || primary._id;
+  var sibs = canvas.getObjects().filter(function(o){
+    return o !== primary && (o._originalId || o._id) === oid && o._mmW != null;
+  });
+  if(!sibs.length) return;
+  var pxPerMm = window._displayPxPerMm || 5;
+
+  sibs.forEach(function(sib){
+    if(sib.type === 'group'){
+      fabric.loadSVGFromString(res.svg, function(objects, options){
+        var g = fabric.util.groupSVGElements(objects, options);
+        g.objectCaching = false;
+        if(g._objects) g._objects.forEach(function(ch){ ch.objectCaching = false; });
+        var nmW = (sib._mmW || 50) * res.ratioW;
+        var nmH = (sib._mmH || 50) * res.ratioH;
+        g.set({
+          originX: 'left', originY: 'top',
+          left: sib.left, top: sib.top, angle: sib.angle,
+          flipX: !!sib.flipX, flipY: !!sib.flipY,
+          scaleX: (nmW * pxPerMm) / g.width,
+          scaleY: (nmH * pxPerMm) / g.height,
+        });
+        g._id = sib._id; g._originalId = sib._originalId; g._name = sib._name;
+        g._naturalW = g.width; g._naturalH = g.height;
+        g._mmW = nmW; g._mmH = nmH; g._mmLeft = sib._mmLeft; g._mmTop = sib._mmTop;
+        g._svgSource = res.svg; g._recolored = true; g._hasAppliedOutline = true;
+        if(sib._vectorOrigin) g._vectorOrigin = sib._vectorOrigin;
+        if(sib._isFillTile) g._isFillTile = sib._isFillTile;
+        if(typeof window.attachObjListeners === 'function') window.attachObjListeners(g);
+        canvas.remove(sib);
+        canvas.add(g);
+        if(typeof window.syncMmFromPx === 'function') window.syncMmFromPx(g);
+        canvas.requestRenderAll();
+      });
+    } else if(sib.type === 'image'){
+      // Rasterized clone: re-render outlined SVG and swap the element in-place
+      var targetW = Math.max(600, Math.round(sib.width * (sib.scaleX || 1) * 3));
+      _renderSvgSourceToCanvas(res.svg, targetW, function(c){
+        if(!c) return;
+        fabric.Image.fromURL(c.toDataURL('image/png'), function(newImg){
+          var nmW = (sib._mmW || 50) * res.ratioW;
+          var nmH = (sib._mmH || 50) * res.ratioH;
+          sib.setElement(newImg.getElement());
+          sib._mmW = nmW; sib._mmH = nmH;
+          sib._svgSource = res.svg; sib._recolored = true;
+          sib.scaleX = (nmW * pxPerMm) / sib.width;
+          sib.scaleY = (nmH * pxPerMm) / sib.height;
+          sib.dirty = true;
+          sib.setCoords();
+          canvas.requestRenderAll();
+        }, { crossOrigin: 'anonymous' });
+      });
+    }
+  });
+}
+
 function applyOutline(){
   var ow = document.getElementById('leOutWidth');
   var oc = document.getElementById('leOutColor');
@@ -1134,6 +1478,57 @@ function onSharpChange(){
   if(s && sv) sv.textContent = parseFloat(s.value).toFixed(1);
 }
 
+/* Raster-bewerking (outline, kleur, upscale) doorvoeren naar alle
+   kopieën van hetzelfde logo — element-swap in-place, posities blijven. */
+function _propagateRasterEditToSiblings(primary, dataUrl, ratioW, ratioH){
+  var canvas = window._gsbCanvas;
+  if(!canvas) return;
+  var oid = primary._originalId || primary._id;
+  var pxPerMm = window._displayPxPerMm || 5;
+  var sibs = canvas.getObjects().filter(function(o){
+    return o !== primary && (o._originalId || o._id) === oid && o._mmW != null;
+  });
+  sibs.forEach(function(sib){
+    fabric.Image.fromURL(dataUrl, function(newImg){
+      var nmW = (sib._mmW || 50) * ratioW;
+      var nmH = (sib._mmH || 50) * ratioH;
+      if(sib.type === 'image'){
+        sib.setElement(newImg.getElement());
+        sib._mmW = nmW; sib._mmH = nmH;
+        sib._recolored = true; sib._rasterEdited = true;
+        sib._svgSource = null;
+        sib.scaleX = (nmW * pxPerMm) / sib.width;
+        sib.scaleY = (nmH * pxPerMm) / sib.height;
+        sib.dirty = true;
+        sib.setCoords();
+      } else {
+        // Group (vector) sibling: replace with the edited raster
+        newImg.set({
+          originX: 'left', originY: 'top',
+          left: sib.left, top: sib.top, angle: sib.angle,
+          flipX: !!sib.flipX, flipY: !!sib.flipY,
+          scaleX: (nmW * pxPerMm) / newImg.width,
+          scaleY: (nmH * pxPerMm) / newImg.height,
+        });
+        newImg.objectCaching = false;
+        newImg._id = sib._id; newImg._originalId = sib._originalId;
+        newImg._name = sib._name;
+        newImg._naturalW = newImg.width; newImg._naturalH = newImg.height;
+        newImg._mmW = nmW; newImg._mmH = nmH;
+        newImg._mmLeft = sib._mmLeft; newImg._mmTop = sib._mmTop;
+        if(sib._vectorOrigin) newImg._vectorOrigin = sib._vectorOrigin;
+        if(sib._isFillTile) newImg._isFillTile = sib._isFillTile;
+        newImg._recolored = true; newImg._rasterEdited = true;
+        if(typeof window.attachObjListeners === 'function') window.attachObjListeners(newImg);
+        canvas.remove(sib);
+        canvas.add(newImg);
+        if(typeof window.syncMmFromPx === 'function') window.syncMmFromPx(newImg);
+      }
+      canvas.requestRenderAll();
+    }, { crossOrigin: 'anonymous' });
+  });
+}
+
 /* ══════════════════════════════════════════
    APPLY — vector stays vector, raster stays raster
    ══════════════════════════════════════════ */
@@ -1142,7 +1537,23 @@ function apply(){
 
   if(_isVector){
     if(_hasOutline && _outlineWidth > 0){
-      // Outline was applied → rasterize vector + outline at high resolution
+      // ── SVG-natieve outline: vector blijft vector ──
+      // De outline wordt in de SVG-bron zelf gebouwd, zodat zowel het
+      // canvas als de PDF-export (drukproef + print ready) hem meenemen.
+      var svgSrcA = _getSvgSrc(_fabricObj);
+      if(svgSrcA){
+        var refW = _preOutlineCanvas ? _preOutlineCanvas.width : _workCanvas.width;
+        var outlinePxA = _outlineWidth * _vectorMult / 3;
+        var resA = _applySvgOutlineToSource(svgSrcA, outlinePxA, refW, _outlineColor);
+        if(resA){
+          _replaceVectorWithOutlinedSvg(_fabricObj, resA);
+          close(true);
+          return;
+        }
+        console.warn('[LE] SVG outline failed — falling back to raster outline');
+      }
+
+      // Fallback (geen bruikbare SVG-bron): rasterize vector + outline at high resolution
       var displayW2 = _fabricObj.width * (_fabricObj.scaleX || 1);
       var mult2 = Math.max(3, Math.ceil(2000 / Math.max(displayW2, 1)));
       var vecRender = _fabricObj.toCanvasElement(mult2);
@@ -1180,6 +1591,8 @@ function apply(){
         newImg._mmTop = obj2._mmTop;
         if(obj2._vectorOrigin) newImg._vectorOrigin = obj2._vectorOrigin;
         if(obj2._isFillTile) newImg._isFillTile = obj2._isFillTile;
+        newImg._recolored = true;    // export: prefer this sample, skip embedPdf
+        newImg._rasterEdited = true; // export: force Track 3 (raster)
         // Do NOT copy _svgSource → forces Track 3 raster export
         // Also remove from svgSourceStore so export cannot find it
         if(obj2._originalId && typeof svgSourceStore !== 'undefined'){
@@ -1207,6 +1620,7 @@ function apply(){
     // No outline — vector stays vector, color changes already on group
     _fabricObj.dirty = true;
     _fabricObj._recolored = true;
+    if(typeof window.autoDarkBgForWhiteLogo === 'function') window.autoDarkBgForWhiteLogo(_fabricObj);
     var canvas = window._gsbCanvas;
     if(canvas){
       canvas.requestRenderAll();
@@ -1257,6 +1671,8 @@ function apply(){
     // Clear SVG source — raster edits are not reflected in SVG,
     // so export must use raster track (Track 3)
     // Do NOT copy _svgSource to newImg
+    newImg._recolored = true;    // export: prefer this sample, skip embedPdf (Track 2)
+    newImg._rasterEdited = true; // export: force Track 3 — edits (incl. outline) zitten in de pixels
 
     var canvas = window._gsbCanvas;
     if(canvas){
@@ -1269,6 +1685,9 @@ function apply(){
       if(typeof window.renderItemList === 'function') window.renderItemList();
       if(typeof window.renderSelectedPanel === 'function') window.renderSelectedPanel();
     }
+    // Zelfde bewerking doorvoeren naar alle kopieën van dit logo
+    _propagateRasterEditToSiblings(newImg, dataUrl, ratioW, ratioH);
+    if(typeof window.autoDarkBgForWhiteLogo === 'function') window.autoDarkBgForWhiteLogo(newImg);
     if(window.toast) window.toast('Logo bijgewerkt', 'success');
   }, { crossOrigin: 'anonymous' });
 

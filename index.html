@@ -935,7 +935,7 @@ window.addEventListener('load', ()=>{
         <tr><td style="padding:3px 8px 3px 0;color:var(--muted)">0</td><td style="padding:3px 0" data-i18n="zoomFit">Passend</td></tr>
       </table>
     </div>
-    <p class="version-tag">v2.17.0 · 12-07-2026</p>
+    <p class="version-tag">v2.18.0 · 12-07-2026</p>
   </div>
 </div>
 
@@ -972,7 +972,7 @@ window.addEventListener('load', ()=>{
 
 <!-- ═══ Projects modal ═══ -->
 <div class="gsb-modal-backdrop" id="projectsModal">
-  <div class="gsb-modal">
+  <div class="gsb-modal wide">
     <div class="gsb-modal-head">
       <h3>Mijn projecten</h3>
       <button class="gsb-modal-close" onclick="gsLoginUI.closeModal('projectsModal')"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
@@ -1052,7 +1052,7 @@ window.addEventListener('load', ()=>{
 
 <!-- ═══ Text Editor modal ═══ -->
 <div class="gsb-modal-backdrop" id="textEditorModal" onclick="if(event.target===this)gsbTextEditor.close()">
-  <div class="gsb-modal" style="max-width:620px">
+  <div class="gsb-modal wide">
     <div class="gsb-modal-head">
       <h3>Tekst maken</h3>
       <button class="gsb-modal-close" onclick="gsbTextEditor.close()"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
@@ -1180,7 +1180,7 @@ window.addEventListener('load', ()=>{
   .le-main{flex:1;min-width:0;display:flex;flex-direction:column;overflow-y:auto;max-height:72vh}
   /* Preview area */
   .le-preview-wrap{background:var(--bg);padding:16px;display:flex;align-items:center;justify-content:center;min-height:160px;position:relative;border-bottom:1px solid var(--border)}
-  .le-preview-wrap canvas{max-width:100%;max-height:360px;border-radius:4px}
+  .le-preview-wrap canvas{max-width:100%;max-height:420px;border-radius:4px}
   .le-file-name{position:absolute;top:8px;left:12px;font-size:.64rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;opacity:.6}
   /* Tool panels */
   .le-tool-panel{display:none;padding:16px 18px;border-bottom:1px solid var(--border)}
@@ -1216,7 +1216,7 @@ window.addEventListener('load', ()=>{
 </style>
 
 <div class="gsb-modal-backdrop" id="logoEditorModal" onclick="if(event.target===this)gsbLogoEditor.close()">
-  <div class="gsb-modal" style="max-width:680px">
+  <div class="gsb-modal wide">
     <div class="gsb-modal-head">
       <h3>Logo bewerken</h3>
       <button class="gsb-modal-close" onclick="gsbLogoEditor.close()"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>

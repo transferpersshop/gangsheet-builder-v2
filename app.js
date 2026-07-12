@@ -513,7 +513,7 @@ const FABRIC_EXTRA_PROPS = [
   '_id','_originalId','_name','_naturalW','_naturalH',
   '_mmW','_mmH','_mmLeft','_mmTop','_isFillTile','_svgSource',
   '_embeddedRasterW','_embeddedRasterH','_vectorOrigin','_recolored','_hasGradients',
-  '_pdfPageW','_pdfPageH'
+  '_pdfPageW','_pdfPageH','_rasterEdited','_hasAppliedOutline'
 ];
 const FABRIC_UNDO_PROPS = FABRIC_EXTRA_PROPS.filter(p => p !== '_svgSource');
 
@@ -2022,6 +2022,7 @@ function placeImage(obj, name, mmW, mmH, naturalW, naturalH){
   attachObjListeners(obj);
   canvas.add(obj);
   registerLogo(obj);
+  autoDarkBgForWhiteLogo(obj);
   autoExtendIfNeeded();
   if(_bulkMode){
     // In bulk mode: skip per-item render, undo push, item list, summary
@@ -2438,14 +2439,15 @@ function calcEffectiveDpi(obj){
   // Check _svgSource (or svgSourceStore fallback) regardless of type: after
   // rasterization for canvas performance, clones are fabric.Image but still
   // vector for export because the SVG source is in svgSourceStore.
-  const svgSrc = getSvgSource(obj);
+  // Raster-bewerkte logo's exporteren als 300 DPI raster — geen vector meer.
+  const svgSrc = obj._rasterEdited ? null : getSvgSource(obj);
   if(svgSrc && !obj._embeddedRasterW) return Infinity;
   // SVG with embedded raster → DPI based on the raster dimensions vs print size.
   if(svgSrc && obj._embeddedRasterW){
     return (obj._embeddedRasterW / obj._mmW) * MM_PER_INCH;
   }
   // PDF/AI rendered as raster but originally vector → treat as infinite DPI.
-  if(obj._vectorOrigin) return Infinity;
+  if(obj._vectorOrigin && !obj._rasterEdited) return Infinity;
   return (obj._naturalW / obj._mmW) * MM_PER_INCH;
 }
 function dpiStatus(dpi){
@@ -5300,12 +5302,15 @@ async function runPdfExport(withBackground = false){
       if(!uniqueLogos.has(oid)){
         uniqueLogos.set(oid, { sample: o, tiles: [] });
       } else {
-        // Prefer a sample with _recolored flag — its _svgSource reflects color changes.
-        // Also prefer group (SVG) over image for higher-fidelity vector export.
+        // Prefer a sample with _recolored/_rasterEdited flag — it reflects
+        // edits (kleur, outline). Also prefer group (SVG) over image for
+        // higher-fidelity vector export when nothing was edited.
         const cur = uniqueLogos.get(oid).sample;
-        if(!cur._recolored && o._recolored){
+        const curEdited = cur._recolored || cur._rasterEdited;
+        const oEdited = o._recolored || o._rasterEdited;
+        if(!curEdited && oEdited){
           uniqueLogos.get(oid).sample = o;
-        } else if(!cur._recolored && !o._recolored && cur.type !== 'group' && o.type === 'group'){
+        } else if(!curEdited && !oEdited && cur.type !== 'group' && o.type === 'group'){
           uniqueLogos.get(oid).sample = o;
         }
       }
@@ -5336,10 +5341,12 @@ async function runPdfExport(withBackground = false){
       //   - Recolored AI/PDF logos
       // Track 2 (embedPdf) embeds the ORIGINAL uncropped PDF page, which causes
       // squished logos when the artboard is larger than the content.
-      const sSvgSrc = getSvgSource(s);
+      // _rasterEdited: edits (outline/kleur/upscale) live only in the pixels —
+      // stale SVG sources or original PDF buffers must NOT be used for export.
+      const sSvgSrc = s._rasterEdited ? null : getSvgSource(s);
       if(canDoSvgVector && sSvgSrc && !s._embeddedRasterW){
         vectorSvgIds.add(oid);
-      } else if(pdfSourceBuffers.has(oid) && !s._recolored && !sSvgSrc){
+      } else if(pdfSourceBuffers.has(oid) && !s._recolored && !s._rasterEdited && !sSvgSrc){
         // AI/PDF PATH B: gradient logo, no _svgSource available.
         // embedPdf is the only way to preserve gradient/pattern fidelity.
         // Check if content is significantly smaller than artboard → fall back to raster.
@@ -6266,15 +6273,50 @@ document.getElementById('gapInput').onchange = e=>{
 /* =========================================================
    SHEET BACKGROUND PICKER
    ========================================================= */
+let _bgManuallyChosen = false;
 document.getElementById('bgPicker').addEventListener('click', e=>{
   if(!e.target.dataset.bg) return;
   const bg = e.target.dataset.bg;
+  _bgManuallyChosen = true;
   state.sheetBg = bg;
   [...e.currentTarget.children].forEach(el=>el.classList.toggle('active', el.dataset.bg===bg));
   const shadow = document.getElementById('sheetShadow');
   shadow.classList.remove('bg-white','bg-gray','bg-black','bg-checker');
   shadow.classList.add('bg-'+bg);
 });
+
+/* Logo's met wit standaard op zwarte achtergrond tonen (alleen preview).
+   Detecteert (bijna-)witte pixels in het logo en zet de vel-achtergrond
+   op zwart — tenzij de gebruiker zelf al een achtergrond koos. */
+function autoDarkBgForWhiteLogo(obj){
+  if(_bgManuallyChosen || state.sheetBg === 'black' || !obj) return;
+  try{
+    const natW = obj.width || 1, natH = obj.height || 1;
+    const mult = Math.min(1, 64 / Math.max(natW, natH));
+    if(!obj.toCanvasElement) return;
+    const el = obj.toCanvasElement(mult);
+    const ctx = el.getContext('2d');
+    const d = ctx.getImageData(0, 0, el.width, el.height).data;
+    let white = 0, opaque = 0;
+    for(let i = 0; i < d.length; i += 4){
+      if(d[i+3] < 40) continue;
+      opaque++;
+      if(d[i] >= 245 && d[i+1] >= 245 && d[i+2] >= 245) white++;
+    }
+    if(opaque > 0 && white / opaque > 0.02){
+      state.sheetBg = 'black';
+      const picker = document.getElementById('bgPicker');
+      if(picker) [...picker.children].forEach(sw => sw.classList.toggle('active', sw.dataset.bg === 'black'));
+      const shadow = document.getElementById('sheetShadow');
+      if(shadow){
+        shadow.classList.remove('bg-white','bg-gray','bg-black','bg-checker');
+        shadow.classList.add('bg-black');
+      }
+      toast('Logo bevat wit — achtergrond op zwart gezet (alleen preview, export blijft transparant)', 'info', 4000);
+    }
+  }catch(e){ /* detection is best-effort */ }
+}
+window.autoDarkBgForWhiteLogo = autoDarkBgForWhiteLogo;
 
 /* =========================================================
    ZOOM
