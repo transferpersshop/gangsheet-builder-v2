@@ -519,7 +519,7 @@ function _textToSvg(text, font, heightMm, color, opts){
   if(hasStroke){
     // Expand viewBox for outward stroke + offset + safety margin
     // (1.6× strokebreedte: ronde joins onder diagonalen steken verder uit)
-    var expand = opts.strokeWidth * 1.6 + strokeOffset + 10;
+    var expand = opts.strokeWidth * 2 + strokeOffset + fontSize * 0.06 + 10;
     tx += expand; ty += expand;
     w += expand * 2; h += expand * 2;
     transforms = 'translate('+_r(tx)+','+_r(ty)+')';

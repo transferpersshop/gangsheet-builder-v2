@@ -75,60 +75,12 @@ window.addEventListener('load', ()=>{
     --border:#e5e7eb;--error:#dc2626;--success:#16a34a;--warn:#f59e0b;
     --gradient:linear-gradient(135deg,var(--primary),var(--secondary));
   }
-  /* ── Donkere modus (licht = standaard) ── */
-  [data-theme="dark"]{
-    --bg-light:#0f172a;--bg-subtle:#1e293b;--text:#e2e8f0;--muted:#94a3b8;--border:#334155;
-  }
-  [data-theme="dark"] body{background:var(--bg-light);color:var(--text)}
-  [data-theme="dark"] .gsb-modal,[data-theme="dark"] .modal,[data-theme="dark"] .login-card,
-  [data-theme="dark"] .info-panel,[data-theme="dark"] .toast,[data-theme="dark"] .section,
-  [data-theme="dark"] .te-fp-panel,[data-theme="dark"] .tour-tooltip{background:#1e293b;color:var(--text)}
-  [data-theme="dark"] input,[data-theme="dark"] select,[data-theme="dark"] textarea{background:#0f172a;color:var(--text);border-color:var(--border)}
-  [data-theme="dark"] .le-sidebar{background:#0f172a}
-  [data-theme="dark"] .le-btn-pick,[data-theme="dark"] .te-upload-btn,[data-theme="dark"] .te-tog,[data-theme="dark"] .te-small-btn{background:#0f172a;color:var(--text);border-color:var(--border)}
-  [data-theme="dark"] .bg-swatch-sm[data-bg="white"]{border:1px solid #64748b}
-  [data-theme="dark"] .center,[data-theme="dark"] .zoom-bar,[data-theme="dark"] .zoom-bar button.zoom-btn,
-  [data-theme="dark"] .canvas-bottom-bar,[data-theme="dark"] .item-row,[data-theme="dark"] .right-footer,
-  [data-theme="dark"] .gap-stepper-wrap,[data-theme="dark"] .size-btn,[data-theme="dark"] .format-btn,
-  [data-theme="dark"] .rot-chips button,[data-theme="dark"] .count-stepper input,
-  [data-theme="dark"] .color-mode-tabs button,[data-theme="dark"] .hdr-icon-btn,
-  [data-theme="dark"] .user-dropdown,[data-theme="dark"] .project-card,
-  [data-theme="dark"] .project-card .pc-actions button,[data-theme="dark"] .le-row select,
-  [data-theme="dark"] .field input,[data-theme="dark"] .field select,
-  [data-theme="dark"] .unit-toggle button.active,[data-theme="dark"] .lang-switch button.active,
-  [data-theme="dark"] .login-tabs button.active{background:#1e293b;color:var(--text);border-color:var(--border)}
-  [data-theme="dark"] .te-fp-trigger,[data-theme="dark"] .te-fp-search{background:#0f172a;color:var(--text);border-color:var(--border)}
-  [data-theme="dark"] .te-preview{background:#fff;border-radius:8px} /* preview bewust licht */
-  [data-theme="dark"] header,[data-theme="dark"] .header-center,[data-theme="dark"] .header-right{background:#1e293b;color:var(--text)}
-  [data-theme="dark"] header h1{color:var(--text)}
-  [data-theme="dark"] .left,[data-theme="dark"] .right,[data-theme="dark"] .app,[data-theme="dark"] .canvas-wrap{background:var(--bg-light)}
-  [data-theme="dark"] .modal-backdrop .modal{background:#1e293b}
-  [data-theme="dark"] .te-fp-item,[data-theme="dark"] .admin-inp,[data-theme="dark"] .te-input{background:#0f172a;color:var(--text);border-color:var(--border)}
   /* ── Gestylede instant-tooltips ── */
   .gsb-tip{position:relative;cursor:help;border-bottom:1px dotted var(--muted)}
   .gsb-tip::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 8px);left:0;background:#1a1a2e;color:#fff;padding:8px 12px;border-radius:8px;font-size:.72rem;font-weight:500;line-height:1.45;width:230px;white-space:normal;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .1s;z-index:6000;box-shadow:0 6px 18px rgba(0,0,0,.3)}
   .gsb-tip::before{content:'';position:absolute;bottom:calc(100% + 3px);left:14px;border:5px solid transparent;border-top-color:#1a1a2e;opacity:0;visibility:hidden;transition:opacity .1s;z-index:6000}
   .gsb-tip:hover::after,.gsb-tip:hover::before{opacity:1;visibility:visible}
-  /* ── Donkere modus: volledige dekking (canvas blijft licht) ── */
-  [data-theme="dark"] button:not(.btn-grad-fill):not(.le-btn-apply):not(.login-submit):not(.bg-swatch-sm):not(.bg-swatch):not(.le-color-chip){background:#1e293b!important;color:#e2e8f0!important;border-color:#334155!important}
-  [data-theme="dark"] .format-btn.active,[data-theme="dark"] .size-btn.active,[data-theme="dark"] .unit-toggle button.active,
-  [data-theme="dark"] .lang-switch button.active,[data-theme="dark"] .color-mode-tabs button.active,
-  [data-theme="dark"] .le-tool-btn.active,[data-theme="dark"] .te-tog.active{background:#0f172a!important;border-color:var(--primary)!important;color:#fff!important}
-  [data-theme="dark"] input:not([type=color]),[data-theme="dark"] select,[data-theme="dark"] textarea{background:#0f172a!important;color:#e2e8f0!important;border-color:#334155!important}
-  [data-theme="dark"] .section,[data-theme="dark"] .center,[data-theme="dark"] .zoom-bar,[data-theme="dark"] .canvas-bottom-bar,
-  [data-theme="dark"] .item-row,[data-theme="dark"] .right-footer,[data-theme="dark"] .gap-stepper-wrap,
-  [data-theme="dark"] .user-dropdown,[data-theme="dark"] .project-card,[data-theme="dark"] .info-panel,
-  [data-theme="dark"] .gsb-modal,[data-theme="dark"] .modal,[data-theme="dark"] .toast,[data-theme="dark"] .tour-tooltip,
-  [data-theme="dark"] .login-card,[data-theme="dark"] .te-fp-panel{background:#1e293b!important;color:#e2e8f0!important}
-  [data-theme="dark"] p,[data-theme="dark"] span:not(.le-swatch):not(.le-color-chip),[data-theme="dark"] label,[data-theme="dark"] td,[data-theme="dark"] th,
-  [data-theme="dark"] h1,[data-theme="dark"] h2,[data-theme="dark"] h3,[data-theme="dark"] h4,[data-theme="dark"] h5{color:#e2e8f0}
-  [data-theme="dark"] .muted,[data-theme="dark"] small{color:#94a3b8!important}
-  /* uitzonderingen: licht houden */
-  [data-theme="dark"] .sheet-shadow,[data-theme="dark"] .sheet-shadow *,[data-theme="dark"] .te-preview{color:initial}
-  [data-theme="dark"] .te-preview{background:#fff!important}
-  [data-theme="dark"] .btn-grad-fill,[data-theme="dark"] .le-btn-apply,[data-theme="dark"] .login-submit{color:#fff!important}
-  [data-theme="dark"] .le-preview-wrap.le-checker{background-color:#334155;background-image:linear-gradient(45deg,#1e293b 25%,transparent 25%),linear-gradient(-45deg,#1e293b 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#1e293b 75%),linear-gradient(-45deg,transparent 75%,#1e293b 75%)}
-  [data-theme="dark"] h1,[data-theme="dark"] h2,[data-theme="dark"] h3,[data-theme="dark"] h4,[data-theme="dark"] label{color:var(--text)}
+
   *{box-sizing:border-box}
   html,body{margin:0;padding:0;height:100%;font-family:'Inter',system-ui,sans-serif;color:var(--text);background:var(--bg-light)}
   h1,h2,h3,h4{font-family:'Nunito',system-ui,sans-serif;font-weight:800;margin:0}
@@ -718,10 +670,6 @@ window.addEventListener('load', ()=>{
       <h1 data-i18n="appTitle">Gang Sheet Builder</h1>
     </div>
     <div class="header-right">
-      <button class="hdr-icon-btn" id="themeBtn" title="Licht / donker" onclick="gsbToggleTheme()">
-        <svg id="themeIconMoon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-        <svg id="themeIconSun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" style="display:none"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-      </button>
       <button class="hdr-icon-btn" id="tourBtn" title="Rondleiding">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
       </button>
@@ -986,21 +934,7 @@ window.addEventListener('load', ()=>{
       <strong data-i18n="infoTipBg">Transparante achtergrond</strong>
       <p data-i18n="infoTipBgBody">Gebruik PNG's met transparante achtergrond. Een witte achtergrond wordt meegeprint als wit vlak rondom je logo. De "Verwijder witte achtergrond" functie kan helpen, maar een echt transparant bronbestand is altijd beter.</p>
     </div>
-    <h3 data-i18n="shortcutsTitle" style="margin-top:24px">Sneltoetsen</h3>
-    <div class="tip-card" id="shortcutsCard">
-      <table style="width:100%;font-size:.8rem;border-collapse:collapse">
-        <tr><td style="padding:3px 8px 3px 0;color:var(--muted)">Ctrl+Z</td><td style="padding:3px 0" data-i18n="undoBtn">Ongedaan maken</td></tr>
-        <tr><td style="padding:3px 8px 3px 0;color:var(--muted)">Ctrl+Shift+Z</td><td style="padding:3px 0" data-i18n="redoBtn">Herhalen</td></tr>
-        <tr><td style="padding:3px 8px 3px 0;color:var(--muted)">Ctrl+D</td><td style="padding:3px 0">Dupliceer</td></tr>
-        <tr><td style="padding:3px 8px 3px 0;color:var(--muted)">Ctrl+A</td><td style="padding:3px 0">Alles selecteren</td></tr>
-        <tr><td style="padding:3px 8px 3px 0;color:var(--muted)">Delete</td><td style="padding:3px 0">Verwijder</td></tr>
-        <tr><td style="padding:3px 8px 3px 0;color:var(--muted)">← → ↑ ↓</td><td style="padding:3px 0">Verplaats (1mm)</td></tr>
-        <tr><td style="padding:3px 8px 3px 0;color:var(--muted)">Shift + pijltjes</td><td style="padding:3px 0">Verplaats (5mm)</td></tr>
-        <tr><td style="padding:3px 8px 3px 0;color:var(--muted)">+ / −</td><td style="padding:3px 0">Zoom in/uit</td></tr>
-        <tr><td style="padding:3px 8px 3px 0;color:var(--muted)">0</td><td style="padding:3px 0" data-i18n="zoomFit">Passend</td></tr>
-      </table>
-    </div>
-    <p class="version-tag">v2.25.0 · 12-07-2026</p>
+    <p class="version-tag">v2.26.1 · 12-07-2026</p>
   </div>
 </div>
 
@@ -1071,9 +1005,6 @@ window.addEventListener('load', ()=>{
         </div>
         <div class="pf-field"><label>Taal</label>
           <select id="profLang"><option value="nl">Nederlands</option><option value="en">English</option></select>
-        </div>
-        <div class="pf-field"><label>Thema</label>
-          <select id="profTheme"><option value="light">Licht</option><option value="dark">Donker</option></select>
         </div>
         <div id="profProofLogoWrap" style="display:none;margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
           <label style="font-size:.78rem;font-weight:700">Eigen drukproef-logo</label>
@@ -1462,15 +1393,14 @@ window.addEventListener('load', ()=>{
   </div>
 </div>
 
-<script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('gsb-theme')||'light');}catch(_){}</script>
 <!-- Supabase JS SDK -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <!-- opentype.js for text-to-SVG -->
 <script src="https://cdn.jsdelivr.net/npm/opentype.js@2.0.0/dist/opentype.min.js"></script>
-<script src="./auth.js"></script>
-<script src="./login-ui.js"></script>
-<script src="./app.js"></script>
-<script src="./text-editor.js"></script>
-<script src="./logo-editor.js"></script>
+<script src="./auth.js?v=2.26.1"></script>
+<script src="./login-ui.js?v=2.26.1"></script>
+<script src="./app.js?v=2.26.1"></script>
+<script src="./text-editor.js?v=2.26.1"></script>
+<script src="./logo-editor.js?v=2.26.1"></script>
 </body>
 </html>
