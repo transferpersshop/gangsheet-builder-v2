@@ -4,6 +4,13 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Gang Sheet Builder — Transferpersshop</title>
+<link rel="icon" href="favicon.ico?v=2" sizes="48x48">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=2">
+<link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png?v=2">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=2">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1d9aaf">
+
 <meta name="description" content="Gratis online gang sheet builder voor DTF transfers. Plaats je logo's, pas kleuren aan en download een print-ready 300 DPI PDF. Door Transferpersshop.">
 <meta name="robots" content="index, follow">
 <link rel="canonical" href="https://www.transferpersshop.nl/builder">
@@ -90,7 +97,18 @@ window.addEventListener('load', ()=>{
   [data-theme="dark"] .field input,[data-theme="dark"] .field select,
   [data-theme="dark"] .unit-toggle button.active,[data-theme="dark"] .lang-switch button.active,
   [data-theme="dark"] .login-tabs button.active{background:#1e293b;color:var(--text);border-color:var(--border)}
-  [data-theme="dark"] .te-preview,[data-theme="dark"] .te-fp-trigger,[data-theme="dark"] .te-fp-search{background:#0f172a;color:var(--text);border-color:var(--border)}
+  [data-theme="dark"] .te-fp-trigger,[data-theme="dark"] .te-fp-search{background:#0f172a;color:var(--text);border-color:var(--border)}
+  [data-theme="dark"] .te-preview{background:#fff;border-radius:8px} /* preview bewust licht */
+  [data-theme="dark"] header,[data-theme="dark"] .header-center,[data-theme="dark"] .header-right{background:#1e293b;color:var(--text)}
+  [data-theme="dark"] header h1{color:var(--text)}
+  [data-theme="dark"] .left,[data-theme="dark"] .right,[data-theme="dark"] .app,[data-theme="dark"] .canvas-wrap{background:var(--bg-light)}
+  [data-theme="dark"] .modal-backdrop .modal{background:#1e293b}
+  [data-theme="dark"] .te-fp-item,[data-theme="dark"] .admin-inp,[data-theme="dark"] .te-input{background:#0f172a;color:var(--text);border-color:var(--border)}
+  /* ── Gestylede instant-tooltips ── */
+  .gsb-tip{position:relative;cursor:help;border-bottom:1px dotted var(--muted)}
+  .gsb-tip::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 8px);left:0;background:#1a1a2e;color:#fff;padding:8px 12px;border-radius:8px;font-size:.72rem;font-weight:500;line-height:1.45;width:230px;white-space:normal;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .1s;z-index:6000;box-shadow:0 6px 18px rgba(0,0,0,.3)}
+  .gsb-tip::before{content:'';position:absolute;bottom:calc(100% + 3px);left:14px;border:5px solid transparent;border-top-color:#1a1a2e;opacity:0;visibility:hidden;transition:opacity .1s;z-index:6000}
+  .gsb-tip:hover::after,.gsb-tip:hover::before{opacity:1;visibility:visible}
   [data-theme="dark"] .le-preview-wrap.le-checker{background-color:#334155;background-image:linear-gradient(45deg,#1e293b 25%,transparent 25%),linear-gradient(-45deg,#1e293b 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#1e293b 75%),linear-gradient(-45deg,transparent 75%,#1e293b 75%)}
   [data-theme="dark"] h1,[data-theme="dark"] h2,[data-theme="dark"] h3,[data-theme="dark"] h4,[data-theme="dark"] label{color:var(--text)}
   *{box-sizing:border-box}
@@ -964,7 +982,7 @@ window.addEventListener('load', ()=>{
         <tr><td style="padding:3px 8px 3px 0;color:var(--muted)">0</td><td style="padding:3px 0" data-i18n="zoomFit">Passend</td></tr>
       </table>
     </div>
-    <p class="version-tag">v2.23.0 · 12-07-2026</p>
+    <p class="version-tag">v2.24.0 · 12-07-2026</p>
   </div>
 </div>
 
@@ -1171,12 +1189,12 @@ window.addEventListener('load', ()=>{
             </div>
           </div>
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
-            <label style="font-size:.68rem;color:var(--muted);white-space:nowrap;margin:0" title="Extra ruimte tussen de letters, in % van de letterhoogte. Negatief = dichter op elkaar.">Spacing &#9432;</label>
+            <label class="gsb-tip" style="font-size:.68rem;color:var(--muted);white-space:nowrap;margin:0" data-tip="Extra ruimte tussen de letters, in % van de letterhoogte. Negatief = letters dichter op elkaar.">Spacing &#9432;</label>
             <input type="range" id="teSpacing" min="-5" max="20" step="1" value="0" style="flex:1;accent-color:var(--primary)" oninput="gsbTextEditor.onSpacingChange()">
             <span id="teSpacingVal" style="font-size:.72rem;font-weight:600;color:var(--fg);min-width:20px;text-align:center">0</span>
           </div>
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
-            <label style="font-size:.68rem;color:var(--muted);white-space:nowrap;margin:0" title="Buigt de tekst langs een boog. Positief = boog omhoog, negatief = boog omlaag, +360° of -360° = tekst volledig rond (cirkel).">Buiging &#9432;</label>
+            <label class="gsb-tip" style="font-size:.68rem;color:var(--muted);white-space:nowrap;margin:0" data-tip="Buigt de tekst langs een boog. Positief = boog omhoog, negatief = boog omlaag. Schuif door naar +360° of -360° om de tekst volledig rond te zetten (cirkel).">Buiging &#9432;</label>
             <input type="range" id="teCurve" min="-360" max="360" step="5" value="0" style="flex:1;accent-color:var(--primary)" oninput="gsbTextEditor.onCurveChange()">
             <span id="teCurveVal" style="font-size:.72rem;font-weight:600;color:var(--fg);min-width:34px;text-align:center">0&deg;</span>
           </div>
@@ -1426,12 +1444,6 @@ window.addEventListener('load', ()=>{
   </div>
 </div>
 
-<link rel="icon" href="favicon.ico" sizes="48x48">
-<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
-<link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
-<link rel="manifest" href="manifest.webmanifest">
-<meta name="theme-color" content="#1d9aaf">
 <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('gsb-theme')||'light');}catch(_){}</script>
 <!-- Supabase JS SDK -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>

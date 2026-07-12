@@ -1871,7 +1871,7 @@ function loadSvg(svgText, name){
 
   // Auto-crop the SVG by adjusting the viewBox (removes transparent padding)
   // This happens BEFORE Fabric loads the SVG, so no clipPath artifacts.
-  autoCropSvg(svgText, (croppedSvgText)=>{
+  const _loadCropped = (croppedSvgText)=>{
     // Parse physical document size from the (possibly cropped) SVG
     const docSize = parseSvgDocSize(croppedSvgText);
 
@@ -1910,7 +1910,10 @@ function loadSvg(svgText, name){
         toast(`⚠️ "${name}": ${t('embeddedRasterWarn')}`, 'warn', 8000);
       }
     });
-  });
+  };
+  // Tekst-SVG's (uit de teksteditor) hebben al exacte marges — direct laden.
+  if(svgText.indexOf('data-gsb-font') !== -1){ _loadCropped(svgText); }
+  else { autoCropSvg(svgText, _loadCropped); }
 }
 
 // Parse SVG text for <image> tags with raster data. Returns {w,h} of the

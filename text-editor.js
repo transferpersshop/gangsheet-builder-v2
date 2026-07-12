@@ -72,6 +72,17 @@ function open(){
   var m = document.getElementById('textEditorModal');
   if(!m) return;
   m.classList.add('open');
+  // Donkere modus: zet de standaard tekstkleur op wit (preview-veld blijft licht)
+  try{
+    if(document.documentElement.getAttribute('data-theme') === 'dark'){
+      var tc = document.getElementById('teColor');
+      if(tc && tc.value.toLowerCase() === '#000000'){
+        tc.value = '#FFFFFF';
+        var tch = document.getElementById('teColorHex');
+        if(tch) tch.textContent = '#FFFFFF';
+      }
+    }
+  }catch(_){ }
   if(!_previewCssOk) _loadPreviewCss();
   _renderFontList();
   _showUsedFonts();
