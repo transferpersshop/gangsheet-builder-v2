@@ -527,7 +527,35 @@ canvas.on('before:transform', () => {
   }
 });
 
+/* ── Adaptieve object-caching ──────────────────────────────────────
+   Vectorgroepen staan standaard op objectCaching=false voor maximale
+   scherpte. Met veel logo's op het vel (grote gang sheets, "vel vullen")
+   moet Fabric dan ELKE frame alle paths opnieuw tekenen → traag.
+   Boven de drempel schakelen we caching in (bitmap per object), eronder
+   weer uit. Debounced zodat bulk-uploads maar één pass kosten. */
+const CACHE_GROUP_THRESHOLD = 40;
+let _cacheStratTimer = null;
+function _updateCachingStrategy(){
+  const groups = canvas.getObjects().filter(o => o._mmW && o.type === 'group');
+  const useCache = groups.length > CACHE_GROUP_THRESHOLD;
+  let changed = false;
+  groups.forEach(o => {
+    if(o.objectCaching !== useCache){
+      o.objectCaching = useCache;
+      o.dirty = true;
+      changed = true;
+    }
+  });
+  if(changed) canvas.requestRenderAll();
+}
+function _updateCachingStrategySoon(){
+  clearTimeout(_cacheStratTimer);
+  _cacheStratTimer = setTimeout(_updateCachingStrategy, 250);
+}
+canvas.on('object:removed', _updateCachingStrategySoon);
+
 function attachObjListeners(o){
+  _updateCachingStrategySoon();
   o.on('modified', ()=>{
     if(!state.manualMode){ clampObjToSheet(o); preventOverlap(o); }
     syncMmFromPx(o);
@@ -728,7 +756,14 @@ function resizeSheet(){
   } else {
     fitScale = Math.min(maxW/basePxW, maxH/basePxH, 1);
   }
-  const scale = fitScale * state.zoom;
+  let scale = fitScale * state.zoom;
+  // Browser-limiet: een canvas mag max ~32k px per dimensie zijn (en grote
+  // canvassen kosten pxW×pxH×4 bytes). Bij lange DTF-rollen (tot 50 m) cappen
+  // we de canvashoogte, anders rendert de browser NIETS meer.
+  const MAX_CANVAS_PX = 16000;
+  if(basePxH * scale > MAX_CANVAS_PX){
+    scale = MAX_CANVAS_PX / basePxH;
+  }
   const pxW = Math.round(sheetMmW * 3 * scale);
   const pxH = Math.round(sheetMmH * 3 * scale);
   displayPxPerMm = pxW / sheetMmW;
@@ -757,7 +792,9 @@ function resizeSheet(){
   });
   canvas.requestRenderAll();
   updateInfoBar();
-  document.getElementById('zoomVal').textContent = Math.round(state.zoom * 100) + '%';
+  // Toon de EFFECTIEVE zoom (kan lager zijn dan state.zoom door de canvas-cap)
+  const effZoom = fitScale > 0 ? (scale / fitScale) : state.zoom;
+  document.getElementById('zoomVal').textContent = Math.round(effZoom * 100) + '%';
   renderRuler();
   renderHRuler();
 }
@@ -774,14 +811,21 @@ function renderRuler(){
   ruler.innerHTML = '';
 
   const totalMm = state.sheet.h;
-  const cmStep = 10; // 1cm = 10mm
+  // Adaptieve tick-dichtheid: bij lange rollen (tot 50 m) geen 5000 DOM-nodes
+  // per zoom/resize bouwen. Max ~600 ticks; labels schalen mee.
+  let cmStep = 10;                       // 1cm ticks (standaard)
+  if(totalMm > 30000) cmStep = 100;      // >30m: alleen 10cm ticks
+  else if(totalMm > 12000) cmStep = 50;  // >12m: 5cm ticks
+  else if(totalMm > 6000) cmStep = 20;   // >6m: 2cm ticks
+  const labelStep = cmStep <= 10 ? 100 : (cmStep <= 50 ? 500 : 1000); // mm tussen labels
 
+  const frag = document.createDocumentFragment();
   for(let mm = 0; mm <= totalMm; mm += cmStep){
     const y = mm * pxPerMm;
     const cm = mm / 10;
     const isMeter = mm % 1000 === 0;
-    const is10cm = mm % 100 === 0;
-    const is5cm = mm % 50 === 0;
+    const isLabel = mm % labelStep === 0;
+    const isHalf = mm % (labelStep / 2) === 0;
 
     const tick = document.createElement('div');
     tick.className = 'ruler-tick';
@@ -796,19 +840,20 @@ function renderRuler(){
         label.textContent = (mm/1000) + 'm';
         tick.appendChild(label);
       }
-    } else if(is10cm){
+    } else if(isLabel){
       tick.style.width = '60%';
       const label = document.createElement('span');
       label.className = 'ruler-label';
       label.textContent = cm;
       tick.appendChild(label);
-    } else if(is5cm){
+    } else if(isHalf){
       tick.style.width = '45%';
     } else {
       tick.style.width = '25%';
     }
-    ruler.appendChild(tick);
+    frag.appendChild(tick);
   }
+  ruler.appendChild(frag);
 }
 
 /* =========================================================
@@ -1675,7 +1720,13 @@ async function loadPdfAsImage(arrayBuffer, name){
   try {
     const pdf = await pdfjsLib.getDocument({ data: bufferForRaster }).promise;
     const page = await pdf.getPage(1);
-    const scale = 300 / 72;
+    // 300 DPI render, maar cap de afmetingen — grote artboards (A0 e.d.)
+    // zouden anders honderden MB's aan imageData kosten (dual render ×2)
+    const baseViewport = page.getViewport({ scale: 1 });
+    const MAX_RENDER_PX = 5000;
+    let scale = 300 / 72;
+    const maxDim = Math.max(baseViewport.width, baseViewport.height);
+    if(maxDim * scale > MAX_RENDER_PX) scale = MAX_RENDER_PX / maxDim;
     const viewport = page.getViewport({ scale });
     const ow = Math.round(viewport.width);
     const oh = Math.round(viewport.height);
@@ -1725,9 +1776,13 @@ async function loadPdfAsImage(arrayBuffer, name){
       autoCropRaster(img, (cropped, cw, ch)=>{
         cropped._vectorOrigin = 'pdf';
         cropped._hasGradients = true;
-        // Use actual PDF page dimensions (points → mm) for real-world size
-        let targetMmW = pdfPageW / 72 * 25.4;
-        let targetMmH = pdfPageH / 72 * 25.4;
+        // Use actual PDF page dimensions (points → mm) for real-world size.
+        // CRITICAL: the raster was auto-cropped to the CONTENT bounds (cw×ch),
+        // so the physical target must be scaled by the crop fraction (cw/ow,
+        // ch/oh). Using the full page dims here squeezed cropped content into
+        // the artboard's aspect ratio (logo's werden in elkaar gedrukt).
+        let targetMmW = pdfPageW / 72 * 25.4 * (cw / ow);
+        let targetMmH = pdfPageH / 72 * 25.4 * (ch / oh);
         // Clamp to 90% of sheet width if too large
         if(targetMmW > state.sheet.w * 0.9){
           const scale = (state.sheet.w * 0.9) / targetMmW;

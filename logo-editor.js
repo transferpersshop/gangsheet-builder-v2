@@ -1,7 +1,8 @@
 /* ================================================================
    logo-editor.js — Per-logo bewerkingsmodal voor Gang Sheet Builder
-   v2.18.0 — echte vector preview (SVG-bron), SVG-natieve outline die
-   in de PDF-export (drukproef + print ready) behouden blijft
+   v2.19.0 — echte vector preview (SVG-bron), SVG-natieve outline die
+   in de PDF-export (drukproef + print ready) behouden blijft,
+   auto-commit van openstaande edits bij "Toepassen"
    ================================================================ */
 (function(){
 'use strict';
@@ -797,7 +798,8 @@ function applyColorReplace(){
   }
 
   // Raster path
-  var result = _buildColorReplace(_workCanvas, _pickedRGB, replHex, 40);
+  var picked = _pickedRGB;
+  var result = _buildColorReplace(_workCanvas, picked, replHex, 40);
   _workCtx.drawImage(result, 0, 0);
   _modified = true;
   _pickedRGB = null;
@@ -806,7 +808,7 @@ function applyColorReplace(){
   _extractColors();
   // If we have a pre-outline snapshot, update it too
   if(_preOutlineCanvas){
-    var prResult = _buildColorReplace(_preOutlineCanvas, _pickedRGB, replHex, 40);
+    var prResult = _buildColorReplace(_preOutlineCanvas, picked, replHex, 40);
     var pctx = _preOutlineCanvas.getContext('2d');
     pctx.drawImage(prResult, 0, 0);
   }
@@ -1532,7 +1534,28 @@ function _propagateRasterEditToSiblings(primary, dataUrl, ratioW, ratioH){
 /* ══════════════════════════════════════════
    APPLY — vector stays vector, raster stays raster
    ══════════════════════════════════════════ */
+
+/* Openstaande edits (zichtbaar in de live preview maar nog niet per-tool
+   bevestigd) automatisch committen — gebruiker hoeft alleen "Toepassen"
+   te klikken. */
+function _commitPendingEdits(){
+  if(!_fabricObj) return;
+  // 1. Openstaande kleurvervanging (bronkleur gekozen, nog niet bevestigd)
+  if(_activeTool === 'color' && _pickedRGB){
+    applyColorReplace();
+  }
+  // 2. Openstaande outline (slider > 0, nog niet of met andere waarden toegepast)
+  var ow = document.getElementById('leOutWidth');
+  var oc = document.getElementById('leOutColor');
+  var width = parseFloat(ow ? ow.value : 0) || 0;
+  var color = oc ? oc.value : '#FFFFFF';
+  if(width > 0 && (!_hasOutline || width !== _outlineWidth || color !== _outlineColor)){
+    applyOutline();
+  }
+}
+
 function apply(){
+  _commitPendingEdits();
   if(!_fabricObj || !_modified){ close(false); return; }
 
   if(_isVector){
