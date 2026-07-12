@@ -436,15 +436,15 @@ function _renderGlyphs(font, text, baseline, fontSize, extraSp){
    Result: fill → white gap → stroke ring */
 function _strokeSvg(dAttr, fillColor, strokeColor, sw, offset, transforms, simBoldAttr){
   var out = '';
+  // Outline-laag als GEVULDE verdikte silhouet (fill + stroke in outlinekleur).
+  // Een kale stroke-ring werd weggedrukt door de fill van overlappende
+  // buurletters (vooral bij gebogen tekst) — een gevulde unie niet.
   if(offset > 0){
     var totalSW = (sw + offset) * 2;
-    // Layer 1: full stroke ring
-    out += '<path d="'+dAttr+'" fill="none" stroke="'+strokeColor+'" stroke-width="'+_r(totalSW)+'" stroke-linejoin="round" stroke-linecap="round" transform="'+transforms+'"/>';
-    // Layer 2: white gap ring (covers inner offset area)
-    out += '<path d="'+dAttr+'" fill="none" stroke="white" stroke-width="'+_r(offset*2)+'" stroke-linejoin="round" stroke-linecap="round" transform="'+transforms+'"/>';
+    out += '<path d="'+dAttr+'" fill="'+strokeColor+'" stroke="'+strokeColor+'" stroke-width="'+_r(totalSW)+'" stroke-linejoin="round" stroke-linecap="round" transform="'+transforms+'"/>';
+    out += '<path d="'+dAttr+'" fill="white" stroke="white" stroke-width="'+_r(offset*2)+'" stroke-linejoin="round" stroke-linecap="round" transform="'+transforms+'"/>';
   } else {
-    // No gap — simple stroke ring
-    out += '<path d="'+dAttr+'" fill="none" stroke="'+strokeColor+'" stroke-width="'+_r(sw*2)+'" stroke-linejoin="round" stroke-linecap="round" transform="'+transforms+'"/>';
+    out += '<path d="'+dAttr+'" fill="'+strokeColor+'" stroke="'+strokeColor+'" stroke-width="'+_r(sw*2)+'" stroke-linejoin="round" stroke-linecap="round" transform="'+transforms+'"/>';
   }
   // Layer 3: fill on top
   out += '<path d="'+dAttr+'" fill="'+fillColor+'"'+(simBoldAttr||'')+' stroke="none" transform="'+transforms+'"/>';
@@ -746,8 +746,9 @@ function _curvedSvg(text, font, fontSize, color, opts){
   var inner = '';
   if(hasStroke){
     var off = opts.strokeOffset||0;
-    inner += gO+' fill="none" stroke="'+opts.strokeColor+'" stroke-width="'+_r((opts.strokeWidth+off)*2)+'" stroke-linejoin="round" stroke-linecap="round">'+gp+'</g>';
-    if(off>0) inner += gO+' fill="none" stroke="white" stroke-width="'+_r(off*2)+'" stroke-linejoin="round" stroke-linecap="round">'+gp+'</g>';
+    // Gevulde silhouet-unie i.p.v. kale ring — zie _strokeSvg
+    inner += gO+' fill="'+opts.strokeColor+'" stroke="'+opts.strokeColor+'" stroke-width="'+_r((opts.strokeWidth+off)*2)+'" stroke-linejoin="round" stroke-linecap="round">'+gp+'</g>';
+    if(off>0) inner += gO+' fill="white" stroke="white" stroke-width="'+_r(off*2)+'" stroke-linejoin="round" stroke-linecap="round">'+gp+'</g>';
   }
   var boldA = opts.simulateBold ? ' stroke="'+color+'" stroke-width="'+(fontSize*0.022).toFixed(1)+'" stroke-linejoin="round"' : '';
   inner += gO+' fill="'+color+'"'+boldA+'>'+gp+'</g>';

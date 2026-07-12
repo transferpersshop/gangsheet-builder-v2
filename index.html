@@ -109,6 +109,24 @@ window.addEventListener('load', ()=>{
   .gsb-tip::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 8px);left:0;background:#1a1a2e;color:#fff;padding:8px 12px;border-radius:8px;font-size:.72rem;font-weight:500;line-height:1.45;width:230px;white-space:normal;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .1s;z-index:6000;box-shadow:0 6px 18px rgba(0,0,0,.3)}
   .gsb-tip::before{content:'';position:absolute;bottom:calc(100% + 3px);left:14px;border:5px solid transparent;border-top-color:#1a1a2e;opacity:0;visibility:hidden;transition:opacity .1s;z-index:6000}
   .gsb-tip:hover::after,.gsb-tip:hover::before{opacity:1;visibility:visible}
+  /* ── Donkere modus: volledige dekking (canvas blijft licht) ── */
+  [data-theme="dark"] button:not(.btn-grad-fill):not(.le-btn-apply):not(.login-submit):not(.bg-swatch-sm):not(.bg-swatch):not(.le-color-chip){background:#1e293b!important;color:#e2e8f0!important;border-color:#334155!important}
+  [data-theme="dark"] .format-btn.active,[data-theme="dark"] .size-btn.active,[data-theme="dark"] .unit-toggle button.active,
+  [data-theme="dark"] .lang-switch button.active,[data-theme="dark"] .color-mode-tabs button.active,
+  [data-theme="dark"] .le-tool-btn.active,[data-theme="dark"] .te-tog.active{background:#0f172a!important;border-color:var(--primary)!important;color:#fff!important}
+  [data-theme="dark"] input:not([type=color]),[data-theme="dark"] select,[data-theme="dark"] textarea{background:#0f172a!important;color:#e2e8f0!important;border-color:#334155!important}
+  [data-theme="dark"] .section,[data-theme="dark"] .center,[data-theme="dark"] .zoom-bar,[data-theme="dark"] .canvas-bottom-bar,
+  [data-theme="dark"] .item-row,[data-theme="dark"] .right-footer,[data-theme="dark"] .gap-stepper-wrap,
+  [data-theme="dark"] .user-dropdown,[data-theme="dark"] .project-card,[data-theme="dark"] .info-panel,
+  [data-theme="dark"] .gsb-modal,[data-theme="dark"] .modal,[data-theme="dark"] .toast,[data-theme="dark"] .tour-tooltip,
+  [data-theme="dark"] .login-card,[data-theme="dark"] .te-fp-panel{background:#1e293b!important;color:#e2e8f0!important}
+  [data-theme="dark"] p,[data-theme="dark"] span:not(.le-swatch):not(.le-color-chip),[data-theme="dark"] label,[data-theme="dark"] td,[data-theme="dark"] th,
+  [data-theme="dark"] h1,[data-theme="dark"] h2,[data-theme="dark"] h3,[data-theme="dark"] h4,[data-theme="dark"] h5{color:#e2e8f0}
+  [data-theme="dark"] .muted,[data-theme="dark"] small{color:#94a3b8!important}
+  /* uitzonderingen: licht houden */
+  [data-theme="dark"] .sheet-shadow,[data-theme="dark"] .sheet-shadow *,[data-theme="dark"] .te-preview{color:initial}
+  [data-theme="dark"] .te-preview{background:#fff!important}
+  [data-theme="dark"] .btn-grad-fill,[data-theme="dark"] .le-btn-apply,[data-theme="dark"] .login-submit{color:#fff!important}
   [data-theme="dark"] .le-preview-wrap.le-checker{background-color:#334155;background-image:linear-gradient(45deg,#1e293b 25%,transparent 25%),linear-gradient(-45deg,#1e293b 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#1e293b 75%),linear-gradient(-45deg,transparent 75%,#1e293b 75%)}
   [data-theme="dark"] h1,[data-theme="dark"] h2,[data-theme="dark"] h3,[data-theme="dark"] h4,[data-theme="dark"] label{color:var(--text)}
   *{box-sizing:border-box}
@@ -982,7 +1000,7 @@ window.addEventListener('load', ()=>{
         <tr><td style="padding:3px 8px 3px 0;color:var(--muted)">0</td><td style="padding:3px 0" data-i18n="zoomFit">Passend</td></tr>
       </table>
     </div>
-    <p class="version-tag">v2.24.0 · 12-07-2026</p>
+    <p class="version-tag">v2.25.0 · 12-07-2026</p>
   </div>
 </div>
 
