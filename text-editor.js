@@ -63,6 +63,7 @@ var _spacing = 0;           // extra spacing in % of fontSize (0 = normal)
 var _strokeColor = 'none';
 var _strokeWidth = 0;
 var _strokeOffset = 0;  // gap between text and stroke (outside)
+var _curve = 0;         // buiging in graden (0 = recht, 360 = volledige cirkel)
 // Jersey rows
 var _jerseyRows = [{name:'', num:''}];
 
@@ -455,6 +456,12 @@ function _textToSvg(text, font, heightMm, color, opts){
   var fontSize = (heightMm / refH) * upm;
   var extraSp = opts.spacing * fontSize / 100;
 
+  // ── Gebogen tekst: aparte route (glyphs langs boog) ──
+  if(opts.curve && Math.abs(opts.curve) >= 5){
+    var curvedR = _curvedSvg(text, font, fontSize, color, opts);
+    if(curvedR) return curvedR;
+  }
+
   // ── Render path data ──
   var dAttr, bb;
   try{
@@ -554,6 +561,25 @@ function _refreshPreview(){
   var color = ci?ci.value:'#000000';
   try{
     var font = _currentFont;
+    // Gebogen tekst: volledige SVG-route hergebruiken
+    if(_curve && Math.abs(_curve) >= 5){
+      var cvR = _curvedSvg(_allCaps ? text.toUpperCase() : text, _currentFont, 60, color, {
+        spacing:_spacing, curve:_curve, simulateBold:false,
+        strokeColor:_strokeColor, strokeWidth:_strokeWidth, strokeOffset:_strokeOffset,
+      });
+      if(cvR){
+        el.style.cssText = _isLightColor(color) ? 'background:#1a1a1a;border-radius:6px;padding:4px' : '';
+        el.innerHTML = cvR.svg;
+        var se2 = el.querySelector('svg');
+        if(se2){
+          var cw2 = el.clientWidth || 540;
+          var dh2 = Math.min(200, cw2 / (cvR.mmW/cvR.mmH));
+          se2.removeAttribute('width'); se2.removeAttribute('height');
+          se2.style.cssText = 'display:block;margin:0 auto;height:'+Math.round(dh2)+'px;max-width:100%';
+        }
+        return;
+      }
+    }
     var wt = _bold?'700':'400';
     var st = _italic?'italic':'normal';
     var key = _currentName+'__'+wt+'_'+st;
@@ -644,6 +670,88 @@ function _refreshPreview(){
   }
 }
 
+
+/* ══════════ Gebogen tekst — glyphs langs een cirkelboog ══════════ */
+function onCurveChange(){
+  var c = document.getElementById('teCurve');
+  var v = document.getElementById('teCurveVal');
+  _curve = parseFloat(c ? c.value : 0) || 0;
+  if(v) v.textContent = _curve + '\u00b0';
+  _refreshPreview();
+}
+function _renderCurved(font, text, fontSize, extraSp, arcDeg){
+  var glyphs; try{ glyphs = font.stringToGlyphs(text); }catch(_){ return null; }
+  if(!glyphs || !glyphs.length) return null;
+  var scale = fontSize/(font.unitsPerEm||1000);
+  var adv = [], total = 0, i;
+  for(i=0;i<glyphs.length;i++){
+    var a = (glyphs[i].advanceWidth||0)*scale;
+    if(i<glyphs.length-1){ try{ a += font.getKerningValue(glyphs[i],glyphs[i+1])*scale; }catch(_){ } a += extraSp; }
+    adv.push(a); total += a;
+  }
+  if(total <= 0) return null;
+  var sign = arcDeg > 0 ? 1 : -1;
+  var arc = Math.min(360, Math.abs(arcDeg)) * Math.PI/180;
+  var R = total / arc;
+  var items = [], mnX=1e9,mnY=1e9,mxX=-1e9,mxY=-1e9, x = 0;
+  for(var j=0;j<glyphs.length;j++){
+    var g = glyphs[j];
+    var gw = (g.advanceWidth||0)*scale;
+    var mid = x + gw/2;
+    var theta = (mid/total - 0.5) * arc;
+    var px = R * Math.sin(theta);
+    var py = sign * (R - R*Math.cos(theta));
+    var rot = sign > 0 ? theta : -theta;
+    var p; try{ p = g.getPath(-gw/2, 0, fontSize); }catch(_){ p = null; }
+    var d = p ? _pd(p) : '';
+    if(d){
+      items.push({ d:d, x:px, y:py, rot:rot*180/Math.PI });
+      var bb = p.getBoundingBox();
+      var cs = Math.cos(rot), sn = Math.sin(rot);
+      [[bb.x1,bb.y1],[bb.x2,bb.y1],[bb.x1,bb.y2],[bb.x2,bb.y2]].forEach(function(pt){
+        var X = px + pt[0]*cs - pt[1]*sn, Y = py + pt[0]*sn + pt[1]*cs;
+        if(X<mnX)mnX=X; if(X>mxX)mxX=X; if(Y<mnY)mnY=Y; if(Y>mxY)mxY=Y;
+      });
+    }
+    x += adv[j];
+  }
+  if(!items.length) return null;
+  return { items:items, bb:{x1:mnX,y1:mnY,x2:mxX,y2:mxY} };
+}
+function _curvedSvg(text, font, fontSize, color, opts){
+  var cr = _renderCurved(font, text, fontSize, opts.spacing*fontSize/100, opts.curve);
+  if(!cr) return null;
+  var bb = cr.bb, w = bb.x2-bb.x1, h = bb.y2-bb.y1;
+  if(w<=0||h<=0) return null;
+  var tx = -bb.x1, ty = -bb.y1;
+  var hasStroke = opts.strokeColor && opts.strokeColor!=='none' && opts.strokeWidth>0;
+  var expand = hasStroke ? (opts.strokeWidth + (opts.strokeOffset||0) + 8) : 2;
+  tx += expand; ty += expand; w += expand*2; h += expand*2;
+  var gp = cr.items.map(function(it){
+    return '<path d="'+it.d+'" transform="translate('+_r(it.x)+','+_r(it.y)+') rotate('+_r(it.rot)+')"/>';
+  }).join('');
+  var gO = '<g transform="translate('+_r(tx)+','+_r(ty)+')"';
+  var inner = '';
+  if(hasStroke){
+    var off = opts.strokeOffset||0;
+    inner += gO+' fill="none" stroke="'+opts.strokeColor+'" stroke-width="'+_r((opts.strokeWidth+off)*2)+'" stroke-linejoin="round" stroke-linecap="round">'+gp+'</g>';
+    if(off>0) inner += gO+' fill="none" stroke="white" stroke-width="'+_r(off*2)+'" stroke-linejoin="round" stroke-linecap="round">'+gp+'</g>';
+  }
+  var boldA = opts.simulateBold ? ' stroke="'+color+'" stroke-width="'+(fontSize*0.022).toFixed(1)+'" stroke-linejoin="round"' : '';
+  inner += gO+' fill="'+color+'"'+boldA+'>'+gp+'</g>';
+  return { svg:'<svg xmlns="http://www.w3.org/2000/svg" width="'+_r(w)+'mm" height="'+_r(h)+'mm" viewBox="0 0 '+_r(w)+' '+_r(h)+'" data-gsb-font="'+_esc(_currentName)+'">'+inner+'</svg>', mmW:w, mmH:h };
+}
+/* ══════════ Sidebar-panelen ══════════ */
+function selectPanel(p){
+  ['create','fonts'].forEach(function(k){
+    var pane = document.getElementById('tePanel_'+k);
+    if(pane) pane.style.display = (k===p) ? '' : 'none';
+    var btn = document.getElementById('teTabBtn_'+k);
+    if(btn) btn.classList.toggle('active', k===p);
+  });
+  if(p==='fonts') _showUsedFonts();
+}
+
 /* ══════════ Add texts to canvas ══════════ */
 async function addTexts(){
   if(!_currentFont){ if(window.toast) window.toast('Kies eerst een lettertype','warn'); return; }
@@ -673,6 +781,7 @@ async function addTexts(){
       bold:_bold, italic:_italic, underline:_underline, allCaps:_allCaps,
       spacing:_spacing, simulateBold:simBold, simulateItalic:simItalic,
       strokeColor:_strokeColor, strokeWidth:_strokeWidth, strokeOffset:_strokeOffset,
+      curve:_curve,
     });
     if(!result){ console.warn('[TE] Empty SVG for:',line); return; }
     if(window.loadSvg){ window.loadSvg(result.svg, line); added++; }
@@ -1240,6 +1349,8 @@ window.gsbTextEditor = {
   toggleBold:toggleBold, toggleItalic:toggleItalic,
   toggleUnderline:toggleUnderline, toggleAllCaps:toggleAllCaps,
   onSpacingChange:onSpacingChange,
+  onCurveChange:onCurveChange,
+  selectPanel:selectPanel,
   syncColor:syncColor, syncStroke:syncStroke,
   addTexts:addTexts,
   updatePreview:_refreshPreview,

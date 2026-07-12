@@ -68,6 +68,18 @@ window.addEventListener('load', ()=>{
     --border:#e5e7eb;--error:#dc2626;--success:#16a34a;--warn:#f59e0b;
     --gradient:linear-gradient(135deg,var(--primary),var(--secondary));
   }
+  /* ── Donkere modus (licht = standaard) ── */
+  [data-theme="dark"]{
+    --bg-light:#0f172a;--bg-subtle:#1e293b;--text:#e2e8f0;--muted:#94a3b8;--border:#334155;
+  }
+  [data-theme="dark"] body{background:var(--bg-light);color:var(--text)}
+  [data-theme="dark"] .gsb-modal,[data-theme="dark"] .modal,[data-theme="dark"] .login-card,
+  [data-theme="dark"] .info-panel,[data-theme="dark"] .toast,[data-theme="dark"] .section,
+  [data-theme="dark"] .te-fp-panel,[data-theme="dark"] .tour-tooltip{background:#1e293b;color:var(--text)}
+  [data-theme="dark"] input,[data-theme="dark"] select,[data-theme="dark"] textarea{background:#0f172a;color:var(--text);border-color:var(--border)}
+  [data-theme="dark"] .le-sidebar{background:#0f172a}
+  [data-theme="dark"] .le-btn-pick,[data-theme="dark"] .te-upload-btn,[data-theme="dark"] .te-tog,[data-theme="dark"] .te-small-btn{background:#0f172a;color:var(--text);border-color:var(--border)}
+  [data-theme="dark"] .bg-swatch-sm[data-bg="white"]{border:1px solid #64748b}
   *{box-sizing:border-box}
   html,body{margin:0;padding:0;height:100%;font-family:'Inter',system-ui,sans-serif;color:var(--text);background:var(--bg-light)}
   h1,h2,h3,h4{font-family:'Nunito',system-ui,sans-serif;font-weight:800;margin:0}
@@ -935,7 +947,7 @@ window.addEventListener('load', ()=>{
         <tr><td style="padding:3px 8px 3px 0;color:var(--muted)">0</td><td style="padding:3px 0" data-i18n="zoomFit">Passend</td></tr>
       </table>
     </div>
-    <p class="version-tag">v2.21.0 · 12-07-2026</p>
+    <p class="version-tag">v2.22.0 · 12-07-2026</p>
   </div>
 </div>
 
@@ -1007,6 +1019,19 @@ window.addEventListener('load', ()=>{
         <div class="pf-field"><label>Taal</label>
           <select id="profLang"><option value="nl">Nederlands</option><option value="en">English</option></select>
         </div>
+        <div class="pf-field"><label>Thema</label>
+          <select id="profTheme"><option value="light">Licht</option><option value="dark">Donker</option></select>
+        </div>
+        <div id="profProofLogoWrap" style="display:none;margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
+          <label style="font-size:.78rem;font-weight:700">Eigen drukproef-logo</label>
+          <p style="font-size:.72rem;color:var(--muted);margin:2px 0 8px">Vervangt het Transferpersshop-logo in de drukproef-footer. Geen logo geüpload = TPS-logo.</p>
+          <img id="profProofLogoPreview" alt="" style="display:none;max-height:48px;max-width:100%;background:#000;padding:4px;border-radius:6px;margin-bottom:8px">
+          <div style="display:flex;gap:8px">
+            <button type="button" class="le-btn le-btn-pick" onclick="document.getElementById('profProofLogo').click()">Logo uploaden</button>
+            <button type="button" class="le-btn le-btn-pick" onclick="gsLoginUI.removeProofLogo()">Verwijderen</button>
+          </div>
+          <input type="file" id="profProofLogo" accept="image/png,image/jpeg,image/svg+xml" style="display:none" onchange="gsLoginUI.onProofLogoUpload()">
+        </div>
         <button type="submit" class="login-submit" style="margin-top:12px">Opslaan</button>
       </form>
     </div>
@@ -1057,8 +1082,20 @@ window.addEventListener('load', ()=>{
       <h3>Tekst maken</h3>
       <button class="gsb-modal-close" onclick="gsbTextEditor.close()"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
-    <div class="gsb-modal-body" style="padding:18px 22px">
-
+    <div class="gsb-modal-body" style="padding:0">
+     <div class="le-body">
+      <div class="le-sidebar">
+        <button class="le-tool-btn active" id="teTabBtn_create" onclick="gsbTextEditor.selectPanel('create')">
+          <svg viewBox="0 0 24 24"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+          Tekst
+        </button>
+        <button class="le-tool-btn" id="teTabBtn_fonts" onclick="gsbTextEditor.selectPanel('fonts')">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 16l3-8 3 8M10 13.5h4"/></svg>
+          Fonts
+        </button>
+      </div>
+      <div class="le-main" style="padding:16px 20px">
+      <div id="tePanel_create">
       <div class="te-layout">
 
         <!-- ═══ LEFT COLUMN: Controls ═══ -->
@@ -1102,17 +1139,25 @@ window.addEventListener('load', ()=>{
               </div>
             </div>
             <div class="te-field" style="flex:0 0 auto">
-              <label style="font-size:.68rem;color:var(--muted);margin:0 0 2px">Outline</label>
-              <div class="te-color-wrap" title="Outline kleur + dikte">
+              <label style="font-size:.68rem;color:var(--muted);margin:0 0 2px">Outline kleur</label>
+              <div class="te-color-wrap" title="Outline kleur">
                 <input type="color" id="teStrokeColor" value="#FFFFFF" oninput="gsbTextEditor.syncStroke()">
-                <input type="number" id="teStrokeWidth" class="te-input" value="0" min="0" max="20" step="0.5" style="width:42px;padding:4px 5px;font-size:.76rem" oninput="gsbTextEditor.syncStroke()" title="Outline dikte (mm)">
               </div>
+            </div>
+            <div class="te-field" style="flex:0 0 auto">
+              <label style="font-size:.68rem;color:var(--muted);margin:0 0 2px">Outline dikte (mm)</label>
+              <input type="number" id="teStrokeWidth" class="te-input" value="0" min="0" max="20" step="0.5" style="width:64px;padding:4px 6px;font-size:.8rem" oninput="gsbTextEditor.syncStroke()">
             </div>
           </div>
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
             <label style="font-size:.68rem;color:var(--muted);white-space:nowrap;margin:0">Spacing</label>
             <input type="range" id="teSpacing" min="-5" max="20" step="1" value="0" style="flex:1;accent-color:var(--primary)" oninput="gsbTextEditor.onSpacingChange()">
             <span id="teSpacingVal" style="font-size:.72rem;font-weight:600;color:var(--fg);min-width:20px;text-align:center">0</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+            <label style="font-size:.68rem;color:var(--muted);white-space:nowrap;margin:0" title="Positief = boog omhoog, negatief = boog omlaag, ±360° = volledige cirkel">Buiging</label>
+            <input type="range" id="teCurve" min="-360" max="360" step="5" value="0" style="flex:1;accent-color:var(--primary)" oninput="gsbTextEditor.onCurveChange()">
+            <span id="teCurveVal" style="font-size:.72rem;font-weight:600;color:var(--fg);min-width:34px;text-align:center">0&deg;</span>
           </div>
 
           <!-- ══════ Tekst invoer ══════ -->
@@ -1129,7 +1174,7 @@ window.addEventListener('load', ()=>{
               </div>
             </div>
             <div class="te-field">
-              <label>Tekst <span style="font-weight:400;opacity:.65">(één per regel = batch)</span></label>
+              <label>Tekst <span style="font-weight:400;opacity:.65">(nieuwe regel = nieuw los object)</span></label>
               <textarea id="teTextInput" class="te-input te-wysiwyg" rows="3" placeholder="Jan&#10;Piet&#10;Klaas" oninput="gsbTextEditor.updatePreview()"></textarea>
             </div>
             <div style="margin-top:4px">
@@ -1150,16 +1195,20 @@ window.addEventListener('load', ()=>{
               Tekst toevoegen aan vel
             </button>
 
-            <div class="te-field" style="margin-top:10px">
-              <label>Fonts in opdracht</label>
-              <div id="teUsedFonts" style="min-height:16px">
-                <span style="color:#9ca3af;font-size:.78rem">Nog geen teksten op het vel</span>
-              </div>
-            </div>
-
         </div><!-- end te-controls -->
 
       </div><!-- end te-layout -->
+      </div><!-- end tePanel_create -->
+
+      <div id="tePanel_fonts" style="display:none">
+        <h4 style="font-size:.85rem;margin:0 0 10px">Fonts in deze opdracht</h4>
+        <div id="teUsedFonts" style="min-height:16px">
+          <span style="color:#9ca3af;font-size:.78rem">Nog geen teksten op het vel</span>
+        </div>
+      </div>
+
+      </div><!-- end le-main -->
+     </div><!-- end le-body -->
     </div>
   </div>
 </div>
@@ -1356,6 +1405,13 @@ window.addEventListener('load', ()=>{
   </div>
 </div>
 
+<link rel="icon" href="favicon.ico" sizes="48x48">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1d9aaf">
+<script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('gsb-theme')||'light');}catch(_){}</script>
 <!-- Supabase JS SDK -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <!-- opentype.js for text-to-SVG -->

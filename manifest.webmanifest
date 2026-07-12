@@ -1,0 +1,12 @@
+{
+  "name": "Gang Sheet Builder — Transferpersshop",
+  "short_name": "GangSheet",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f0fdff",
+  "theme_color": "#1d9aaf",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

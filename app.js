@@ -137,7 +137,7 @@ const I18N = {
     tourStep4Title:'Vel vullen',
     tourStep4Body:'Selecteer een logo en klik "Vel vullen met logo" om het vel automatisch zo vol mogelijk te vullen. De tool draait logo\'s als dat meer kopieën oplevert.',
     tourStep5Title:'Samenvatting & export',
-    tourStep5Body:'Bekijk het totaal aantal kopieën, velgebruik en DPI-status. Klik "Download print-ready PDF" om een 300 DPI transparante PDF te genereren.',
+    tourStep5Body:'Bekijk het totaal aantal kopieën, velgebruik en DPI-status. Klik "Download print-ready PDF" voor een 300 DPI transparante PDF, of "Download drukproef" voor een proef met achtergrond, maatvoering en footer om naar je klant te sturen. Met "Opdracht opslaan" bewaar je je werk in je account; via "Opdracht openen" laad je een eerder opgeslagen opdracht weer in.',
     tourStep6Title:'Eenheid & achtergrond',
     tourStep6Body:'Wissel hier tussen mm en cm als maateenheid. Kies een vel-achtergrond (wit, grijs of geruit) om je logo\'s beter te zien — de export blijft altijd transparant.',
     tourStepZoomTitle:'Zoom & velknoppen',
@@ -286,7 +286,7 @@ const I18N = {
     tourStep4Title:'Fill sheet',
     tourStep4Body:'Select a logo and click "Fill sheet with logo" to automatically pack the sheet as full as possible. The tool rotates logos if that yields more copies.',
     tourStep5Title:'Summary & export',
-    tourStep5Body:'Review total copies, sheet usage, and DPI status. Click "Download print-ready PDF" to generate a 300 DPI transparent PDF.',
+    tourStep5Body:'Review total copies, sheet usage, and DPI status. Click "Download print-ready PDF" for a 300 DPI transparent PDF, or "Download proof" for a customer-ready proof with background, dimensions and footer. Use "Save project" to store your work in your account and "Open project" to load a previously saved project.',
     tourStep6Title:'Units & background',
     tourStep6Body:'Switch between mm and cm as your unit of measurement. Choose a sheet background (white, gray, or checkered) to see your logos better — the export always stays transparent.',
     tourStepZoomTitle:'Zoom & sheet buttons',
@@ -770,6 +770,19 @@ function resizeSheet(){
   const pxH = Math.round(sheetMmH * 3 * scale);
   displayPxPerMm = pxW / sheetMmW;
   window._displayPxPerMm = displayPxPerMm;
+
+/* ── Thema (licht = standaard, donker per account) ── */
+function gsbApplyTheme(theme){
+  const th = theme === 'dark' ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', th);
+  try{ localStorage.setItem('gsb-theme', th); }catch(_){ }
+}
+window.gsbApplyTheme = gsbApplyTheme;
+try{
+  if(window.gsAuth && typeof gsAuth.onReady === 'function'){
+    gsAuth.onReady(() => { if(gsAuth.profile && gsAuth.profile.theme) gsbApplyTheme(gsAuth.profile.theme); });
+  }
+}catch(_){ }
   canvas.setWidth(pxW);
   canvas.setHeight(pxH);
   const shadow = document.getElementById('sheetShadow');
@@ -5336,6 +5349,22 @@ async function runPdfExport(withBackground = false){
         ftCanvas.width = ftPxW; ftCanvas.height = ftPxH;
         const ftCtx = ftCanvas.getContext('2d');
         ftCtx.drawImage(ftImg, 0, 0, ftPxW, ftPxH);
+        // Eigen drukproef-logo (printer/admin) vervangt het TPS-logo linksin
+        try {
+          const customLogo = (window.gsAuth && gsAuth.profile && gsAuth.profile.proof_logo) || null;
+          if(customLogo){
+            const li = new Image();
+            await new Promise((res, rej) => { li.onload = res; li.onerror = rej; li.src = customLogo; });
+            const areaW = ftPxW * 0.32, pad = ftPxH * 0.14;
+            ftCtx.fillStyle = '#000';
+            ftCtx.fillRect(0, 0, areaW, ftPxH);
+            const mw = areaW - pad * 2, mh = ftPxH - pad * 2;
+            const sc = Math.min(mw / li.width, mh / li.height);
+            const dw = li.width * sc, dh = li.height * sc;
+            ftCtx.drawImage(li, pad + (mw - dw) / 2, pad + (mh - dh) / 2, dw, dh);
+            console.log('[GSB Export] Custom proof logo toegepast in footer');
+          }
+        } catch(clErr){ console.warn('[GSB Export] Custom proof logo mislukt:', clErr); }
         const ftDataUrl = ftCanvas.toDataURL('image/png');
         const ftBase64 = ftDataUrl.split(',')[1];
         const ftBin = atob(ftBase64);

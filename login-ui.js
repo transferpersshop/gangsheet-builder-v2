@@ -243,6 +243,13 @@ function openProfile(){
   if(!p) return;
   document.getElementById('profName').value = p.display_name || '';
   document.getElementById('profCompany').value = p.company_name || '';
+  const profTh = document.getElementById('profTheme');
+  if(profTh) profTh.value = p.theme || 'light';
+  const isStaff = p.role === 'admin' || p.role === 'printer';
+  const plWrap = document.getElementById('profProofLogoWrap');
+  if(plWrap) plWrap.style.display = isStaff ? '' : 'none';
+  const plPrev = document.getElementById('profProofLogoPreview');
+  if(plPrev){ if(p.proof_logo){ plPrev.src = p.proof_logo; plPrev.style.display = ''; } else plPrev.style.display = 'none'; }
   document.getElementById('profFormat').value = p.preferred_format || 'dtf55';
   document.getElementById('profUnit').value = p.preferred_unit || 'cm';
   document.getElementById('profLang').value = p.preferred_lang || 'nl';
@@ -253,12 +260,14 @@ async function handleProfileSave(e){
   const updates = {
     display_name: document.getElementById('profName').value.trim(),
     company_name: document.getElementById('profCompany').value.trim(),
+    theme: (document.getElementById('profTheme') || {}).value || 'light',
     preferred_format: document.getElementById('profFormat').value,
     preferred_unit: document.getElementById('profUnit').value,
     preferred_lang: document.getElementById('profLang').value,
   };
   const { error } = await gsAuth.updateProfile(updates);
   if(error){ alert('Opslaan mislukt: ' + error.message); return; }
+  if(window.gsbApplyTheme) gsbApplyTheme(updates.theme);
   closeModal('profileModal');
   // Update user menu display
   const name = updates.display_name || gsAuth.user?.email?.split('@')[0] || '';
@@ -517,7 +526,34 @@ async function _loadAdminStats(){
 function _esc(s){ return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 /* ── Expose ── */
+
+async function onProofLogoUpload(){
+  const inp = document.getElementById('profProofLogo');
+  const f = inp && inp.files ? inp.files[0] : null;
+  if(!f) return;
+  const dataUrl = await new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(f); });
+  const img = new Image();
+  await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = dataUrl; });
+  const s = Math.min(1, 600 / img.width);
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(img.width * s));
+  c.height = Math.max(1, Math.round(img.height * s));
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  const out = c.toDataURL('image/png');
+  await gsAuth.updateProfile({ proof_logo: out });
+  const prev = document.getElementById('profProofLogoPreview');
+  if(prev){ prev.src = out; prev.style.display = ''; }
+  if(window.toast) toast('Drukproef-logo opgeslagen', 'success');
+}
+async function removeProofLogo(){
+  await gsAuth.updateProfile({ proof_logo: null });
+  const prev = document.getElementById('profProofLogoPreview');
+  if(prev) prev.style.display = 'none';
+  if(window.toast) toast('Eigen logo verwijderd \u2014 TPS-logo wordt gebruikt', 'info');
+}
+
 window.gsLoginUI = {
+  onProofLogoUpload, removeProofLogo,
   showTab, handleLogin, handleRegister, handleReset, handleResetConfirm,
   toggleUserMenu, logout,
   openModal, closeModal,
