@@ -1,6 +1,6 @@
 /* ================================================================
    logo-editor.js — Per-logo bewerkingsmodal voor Gang Sheet Builder
-   v2.16.0 — vector-native editing, CMYK, outline replace, sub-btn
+   v2.17.0 — high-res vector preview, raster outline export, TPS styling
    ================================================================ */
 (function(){
 'use strict';
@@ -31,9 +31,11 @@ var _loupeCtx = null;
 var _vectorOrigState = null;   // { children: [{fill,stroke,strokeWidth,paintOrder},...], svgSource: string }
 
 // Outline state — for "replace not stack"
-var _preOutlineCanvas = null;  // raster: snapshot before first outline
-var _vectorPreOutlineState = null; // vector: saved stroke state before outline
+var _preOutlineCanvas = null;  // snapshot before first outline (both vector & raster)
 var _hasOutline = false;
+var _outlineWidth = 0;         // saved slider value
+var _outlineColor = '#FFFFFF'; // saved outline color
+var _vectorMult = 3;           // multiplier used for vector→canvas rendering
 
 /* ══════════ helpers ══════════ */
 function _hex(n){ return n.toString(16).padStart(2,'0'); }
@@ -58,8 +60,10 @@ function open(fabricObj){
   _pickMode = false;
   _pickedRGB = null;
   _preOutlineCanvas = null;
-  _vectorPreOutlineState = null;
   _hasOutline = false;
+  _outlineWidth = 0;
+  _outlineColor = '#FFFFFF';
+  _vectorMult = 3;
 
   // Detect vector vs raster
   _isVector = (fabricObj.type === 'group' && !!fabricObj._objects);
@@ -70,8 +74,10 @@ function open(fabricObj){
     // Save original state for cancel/undo
     _vectorOrigState = _saveVectorState(fabricObj);
 
-    // Create preview canvas from group rendering
-    var vecCanvas = fabricObj.toCanvasElement(3);
+    // Create preview canvas from group rendering at high resolution
+    var displayW = fabricObj.width * (fabricObj.scaleX || 1);
+    _vectorMult = Math.max(3, Math.ceil(2000 / Math.max(displayW, 1)));
+    var vecCanvas = fabricObj.toCanvasElement(_vectorMult);
     var trimmed = _trimCanvas(vecCanvas);
     _origCanvasW = trimmed.width;
     _origCanvasH = trimmed.height;
@@ -151,8 +157,10 @@ function close(keepChanges){
   _pickMode = false; _pickedRGB = null;
   _vectorOrigState = null;
   _preOutlineCanvas = null;
-  _vectorPreOutlineState = null;
   _hasOutline = false;
+  _outlineWidth = 0;
+  _outlineColor = '#FFFFFF';
+  _vectorMult = 3;
   _destroyLoupe();
   clearTimeout(_liveTimer);
 }
@@ -198,11 +206,30 @@ function _restoreVectorState(group, state){
 /* ══════════ Refresh vector preview ══════════ */
 function _refreshVectorPreview(){
   if(!_isVector || !_fabricObj) return;
-  var vecCanvas = _fabricObj.toCanvasElement(3);
+  var displayW = _fabricObj.width * (_fabricObj.scaleX || 1);
+  var mult = Math.max(3, Math.ceil(2000 / Math.max(displayW, 1)));
+  var vecCanvas = _fabricObj.toCanvasElement(mult);
   var trimmed = _trimCanvas(vecCanvas);
-  _workCanvas.width = trimmed.width;
-  _workCanvas.height = trimmed.height;
-  _workCtx.drawImage(trimmed, 0, 0);
+
+  if(_hasOutline && _outlineWidth > 0){
+    // Update pre-outline canvas with the freshly-rendered group
+    if(!_preOutlineCanvas) _preOutlineCanvas = document.createElement('canvas');
+    _preOutlineCanvas.width = trimmed.width;
+    _preOutlineCanvas.height = trimmed.height;
+    _preOutlineCanvas.getContext('2d').drawImage(trimmed, 0, 0);
+    // Re-apply outline with scaled width
+    var scaledW = _outlineWidth * _vectorMult / 3;
+    var result = _buildOutline(_preOutlineCanvas, scaledW, _outlineColor);
+    _workCanvas.width = result.width;
+    _workCanvas.height = result.height;
+    _workCtx = _workCanvas.getContext('2d');
+    _workCtx.drawImage(result, 0, 0);
+  } else {
+    _workCanvas.width = trimmed.width;
+    _workCanvas.height = trimmed.height;
+    _workCtx = _workCanvas.getContext('2d');
+    _workCtx.drawImage(trimmed, 0, 0);
+  }
   _drawPreview(_workCanvas);
 }
 
@@ -272,14 +299,19 @@ function _livePreview(){
 
 function _liveOutline(){
   if(_isVector){
-    // For vectors, show a raster approximation in preview
     var ow = document.getElementById('leOutWidth');
     var oc = document.getElementById('leOutColor');
     var width = parseFloat(ow ? ow.value : 0) || 0;
     var color = oc ? oc.value : '#FFFFFF';
-    if(width <= 0){ _drawPreview(_workCanvas); return; }
-    // Get current vector render (without outline stroke changes)
-    var tmp = _buildOutline(_workCanvas, width, color);
+    if(width <= 0){
+      // Show pre-outline version if outline was already applied
+      _drawPreview(_preOutlineCanvas || _workCanvas);
+      return;
+    }
+    // Build from pre-outline source to avoid stacking outlines
+    var source = _preOutlineCanvas || _workCanvas;
+    var scaledW = width * _vectorMult / 3;
+    var tmp = _buildOutline(source, scaledW, color);
     _drawPreview(tmp);
     return;
   }
@@ -566,7 +598,9 @@ function reset(){
     _refreshVectorPreview();
     _modified = false;
     _hasOutline = false;
-    _vectorPreOutlineState = null;
+    _outlineWidth = 0;
+    _outlineColor = '#FFFFFF';
+    _preOutlineCanvas = null;
     _resetToolPanels();
     _extractColors();
     if(window.toast) window.toast('Reset naar origineel', 'info', 1200);
@@ -976,54 +1010,33 @@ function applyOutline(){
   if(width <= 0) return;
 
   if(_isVector && _fabricObj){
-    // Vector: apply outline as stroke on SVG children
-    // First restore pre-outline state if outline was already applied
-    if(_hasOutline && _vectorPreOutlineState){
-      _vectorPreOutlineState.children.forEach(function(saved){
-        saved.obj.set('stroke', saved.stroke);
-        saved.obj.set('strokeWidth', saved.strokeWidth);
-        if(saved.paintOrder) saved.obj.set('paintOrder', saved.paintOrder);
-        else saved.obj.set('paintOrder', '');
-        saved.obj.dirty = true;
-      });
-    }
-    // Save pre-outline state (before applying new outline)
-    if(!_hasOutline){
-      _vectorPreOutlineState = { children: [] };
-      var walk = function(objs){
-        objs.forEach(function(o){
-          _vectorPreOutlineState.children.push({
-            obj: o,
-            stroke: o.stroke,
-            strokeWidth: o.strokeWidth || 0,
-            paintOrder: o.paintOrder || ''
-          });
-          if(o._objects) walk(o._objects);
-        });
-      };
-      walk(_fabricObj._objects);
+    // Vector: use raster dilation for outline
+    // (svg2pdf.js cannot reliably render paint-order:stroke, so we rasterize
+    //  the outline at apply-time → Track 3 export at 300 DPI)
+
+    // Save pre-outline canvas for replace behavior (first time only)
+    if(!_preOutlineCanvas){
+      _preOutlineCanvas = document.createElement('canvas');
+      _preOutlineCanvas.width = _workCanvas.width;
+      _preOutlineCanvas.height = _workCanvas.height;
+      _preOutlineCanvas.getContext('2d').drawImage(_workCanvas, 0, 0);
     }
 
-    // Apply stroke to all children using paint-order: stroke fill
-    // (stroke draws behind fill, so outline goes outward)
-    var walkApply = function(objs){
-      objs.forEach(function(o){
-        if(o._objects) walkApply(o._objects);
-        o.set('stroke', color);
-        o.set('strokeWidth', width * 2); // *2 because paint-order hides inner half
-        o.set('paintOrder', 'stroke fill');
-        o.dirty = true;
-      });
-    };
-    walkApply(_fabricObj._objects);
-    _fabricObj.dirty = true;
+    // Save outline parameters for re-apply after color changes
+    _outlineWidth = width;
+    _outlineColor = color;
+
+    // Build outline from pre-outline canvas (replace, not stack)
+    var scaledW = width * _vectorMult / 3;
+    var result = _buildOutline(_preOutlineCanvas, scaledW, color);
+    _workCanvas.width = result.width;
+    _workCanvas.height = result.height;
+    _workCtx = _workCanvas.getContext('2d');
+    _workCtx.drawImage(result, 0, 0);
+
     _hasOutline = true;
     _modified = true;
-
-    // Update _svgSource with stroke attributes
-    _updateSvgSourceOutline(color, width * 2);
-
-    _refreshVectorPreview();
+    _drawPreview(_workCanvas);
     if(window.toast) window.toast('Outline toegepast', 'success', 1200);
     return;
   }
@@ -1052,25 +1065,6 @@ function applyOutline(){
   _modified = true;
   _drawPreview(_workCanvas);
   if(window.toast) window.toast('Outline toegepast', 'success', 1200);
-}
-
-function _updateSvgSourceOutline(color, strokeWidth){
-  if(!_fabricObj || !_fabricObj._svgSource) return;
-  try {
-    var parser = new DOMParser();
-    var doc = parser.parseFromString(_fabricObj._svgSource, 'image/svg+xml');
-    doc.querySelectorAll('path, rect, circle, ellipse, polygon, polyline, line').forEach(function(el){
-      el.setAttribute('stroke', color);
-      el.setAttribute('stroke-width', strokeWidth);
-      el.setAttribute('paint-order', 'stroke fill');
-    });
-    _fabricObj._svgSource = new XMLSerializer().serializeToString(doc.documentElement);
-    if(_fabricObj._originalId && typeof svgSourceStore !== 'undefined'){
-      svgSourceStore.set(_fabricObj._originalId, _fabricObj._svgSource);
-    }
-  } catch(e){
-    console.warn('[LE] Failed to update SVG source outline:', e);
-  }
 }
 
 function previewOutline(){
@@ -1147,7 +1141,70 @@ function apply(){
   if(!_fabricObj || !_modified){ close(false); return; }
 
   if(_isVector){
-    // Vector: changes are already applied to the live group
+    if(_hasOutline && _outlineWidth > 0){
+      // Outline was applied → rasterize vector + outline at high resolution
+      var displayW2 = _fabricObj.width * (_fabricObj.scaleX || 1);
+      var mult2 = Math.max(3, Math.ceil(2000 / Math.max(displayW2, 1)));
+      var vecRender = _fabricObj.toCanvasElement(mult2);
+      var trimmedRender = _trimCanvas(vecRender);
+      var scaledW2 = _outlineWidth * mult2 / 3;
+      var outlinedCanvas = _buildOutline(trimmedRender, scaledW2, _outlineColor);
+
+      var dataUrl2 = outlinedCanvas.toDataURL('image/png');
+      var obj2 = _fabricObj;
+      var nw2 = outlinedCanvas.width, nh2 = outlinedCanvas.height;
+
+      fabric.Image.fromURL(dataUrl2, function(newImg){
+        var ratioW = (_origCanvasW > 0) ? nw2 / _origCanvasW : 1;
+        var ratioH = (_origCanvasH > 0) ? nh2 / _origCanvasH : 1;
+        var newMmW = (obj2._mmW || 50) * ratioW;
+        var newMmH = (obj2._mmH || 50) * ratioH;
+        var pxPerMm = window._displayPxPerMm || 5;
+
+        newImg.set({
+          left: obj2.left, top: obj2.top, angle: obj2.angle,
+          flipX: !!(obj2.flipX), flipY: !!(obj2.flipY),
+          scaleX: (newMmW * pxPerMm) / nw2,
+          scaleY: (newMmH * pxPerMm) / nh2,
+        });
+        newImg.objectCaching = false;
+
+        newImg._id = obj2._id;
+        newImg._originalId = obj2._originalId;
+        newImg._name = obj2._name;
+        newImg._naturalW = nw2;
+        newImg._naturalH = nh2;
+        newImg._mmW = newMmW;
+        newImg._mmH = newMmH;
+        newImg._mmLeft = obj2._mmLeft;
+        newImg._mmTop = obj2._mmTop;
+        if(obj2._vectorOrigin) newImg._vectorOrigin = obj2._vectorOrigin;
+        if(obj2._isFillTile) newImg._isFillTile = obj2._isFillTile;
+        // Do NOT copy _svgSource → forces Track 3 raster export
+        // Also remove from svgSourceStore so export cannot find it
+        if(obj2._originalId && typeof svgSourceStore !== 'undefined'){
+          svgSourceStore.delete(obj2._originalId);
+        }
+
+        var canvas = window._gsbCanvas;
+        if(canvas){
+          if(typeof window.attachObjListeners === 'function') window.attachObjListeners(newImg);
+          canvas.remove(obj2);
+          canvas.add(newImg);
+          canvas.setActiveObject(newImg);
+          canvas.requestRenderAll();
+          if(typeof window.syncMmFromPx === 'function') window.syncMmFromPx(newImg);
+          if(typeof window.renderItemList === 'function') window.renderItemList();
+          if(typeof window.renderSelectedPanel === 'function') window.renderSelectedPanel();
+        }
+        if(window.toast) window.toast('Logo bijgewerkt', 'success');
+      }, { crossOrigin: 'anonymous' });
+
+      close(true);
+      return;
+    }
+
+    // No outline — vector stays vector, color changes already on group
     _fabricObj.dirty = true;
     _fabricObj._recolored = true;
     var canvas = window._gsbCanvas;
@@ -1157,7 +1214,7 @@ function apply(){
       if(typeof window.renderSelectedPanel === 'function') window.renderSelectedPanel();
     }
     if(window.toast) window.toast('Logo bijgewerkt', 'success');
-    close(true); // keep changes
+    close(true);
     return;
   }
 
