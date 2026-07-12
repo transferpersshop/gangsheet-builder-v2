@@ -1,13 +1,13 @@
 /* ================================================================
    logo-editor.js — Per-logo bewerkingsmodal voor Gang Sheet Builder
-   v2.15.1 — outline fix, BG erosion, vector sharpness, full-width preview
+   v2.16.0 — vector-native editing, CMYK, outline replace, sub-btn
    ================================================================ */
 (function(){
 'use strict';
 
 /* ── State ── */
 var _fabricObj = null;
-var _origImg   = null;
+var _origImg   = null;        // only used for raster mode
 var _workCanvas = null;
 var _workCtx   = null;
 var _previewEl = null;
@@ -17,6 +17,7 @@ var _origCanvasW = 0;
 var _origCanvasH = 0;
 var _liveTimer = null;
 var _isRaster  = false;
+var _isVector  = false;
 
 // Color replace state
 var _pickMode   = false;
@@ -26,6 +27,28 @@ var _pickedRGB  = null;
 var _loupeCanvas = null;
 var _loupeCtx = null;
 
+// Vector undo state — saved at open(), restored on cancel
+var _vectorOrigState = null;   // { children: [{fill,stroke,strokeWidth,paintOrder},...], svgSource: string }
+
+// Outline state — for "replace not stack"
+var _preOutlineCanvas = null;  // raster: snapshot before first outline
+var _vectorPreOutlineState = null; // vector: saved stroke state before outline
+var _hasOutline = false;
+
+/* ══════════ helpers ══════════ */
+function _hex(n){ return n.toString(16).padStart(2,'0'); }
+function _hexFromRgb(r,g,b){ return '#'+_hex(r)+_hex(g)+_hex(b); }
+
+// Approximate RGB→CMYK (no ICC, formula-based)
+function _rgbToCmyk(r,g,b){
+  if(typeof rgbToCmyk === 'function') return rgbToCmyk(r,g,b);
+  var r1=r/255, g1=g/255, b1=b/255;
+  var k=1-Math.max(r1,g1,b1);
+  if(k>=1) return {c:0,m:0,y:0,k:100};
+  return { c:Math.round(((1-r1-k)/(1-k))*100), m:Math.round(((1-g1-k)/(1-k))*100),
+           y:Math.round(((1-b1-k)/(1-k))*100), k:Math.round(k*100) };
+}
+
 /* ══════════ Open / Close ══════════ */
 function open(fabricObj){
   if(!fabricObj) return;
@@ -34,43 +57,65 @@ function open(fabricObj){
   _modified = false;
   _pickMode = false;
   _pickedRGB = null;
+  _preOutlineCanvas = null;
+  _vectorPreOutlineState = null;
+  _hasOutline = false;
 
-  var srcCanvas, nw, nh;
-  if(fabricObj.type === 'image'){
-    var imgEl = fabricObj.getElement();
-    if(!imgEl) return;
-    nw = imgEl.naturalWidth || imgEl.width;
-    nh = imgEl.naturalHeight || imgEl.height;
-    srcCanvas = document.createElement('canvas');
-    srcCanvas.width = nw; srcCanvas.height = nh;
-    srcCanvas.getContext('2d').drawImage(imgEl, 0, 0);
-  } else if(fabricObj.toCanvasElement){
-    srcCanvas = fabricObj.toCanvasElement(3);
-    nw = srcCanvas.width;
-    nh = srcCanvas.height;
-  } else { return; }
+  // Detect vector vs raster
+  _isVector = (fabricObj.type === 'group' && !!fabricObj._objects);
+  _isRaster = !_isVector;
 
-  if(!nw || !nh) return;
+  if(_isVector){
+    // ── Vector path ──
+    // Save original state for cancel/undo
+    _vectorOrigState = _saveVectorState(fabricObj);
 
-  // Trim transparent edges from source (removes SVG viewBox margins)
-  var trimmed = _trimCanvas(srcCanvas);
-  nw = trimmed.width;
-  nh = trimmed.height;
+    // Create preview canvas from group rendering
+    var vecCanvas = fabricObj.toCanvasElement(3);
+    var trimmed = _trimCanvas(vecCanvas);
+    _origCanvasW = trimmed.width;
+    _origCanvasH = trimmed.height;
 
-  _origCanvasW = nw;
-  _origCanvasH = nh;
+    _workCanvas = document.createElement('canvas');
+    _workCanvas.width = trimmed.width;
+    _workCanvas.height = trimmed.height;
+    _workCtx = _workCanvas.getContext('2d');
+    _workCtx.drawImage(trimmed, 0, 0);
 
-  _origImg = new Image();
-  _origImg.src = trimmed.toDataURL('image/png');
+    _origImg = null; // not used for vectors
+  } else {
+    // ── Raster path ──
+    _vectorOrigState = null;
+    var srcCanvas, nw, nh;
+    if(fabricObj.type === 'image'){
+      var imgEl = fabricObj.getElement();
+      if(!imgEl) return;
+      nw = imgEl.naturalWidth || imgEl.width;
+      nh = imgEl.naturalHeight || imgEl.height;
+      srcCanvas = document.createElement('canvas');
+      srcCanvas.width = nw; srcCanvas.height = nh;
+      srcCanvas.getContext('2d').drawImage(imgEl, 0, 0);
+    } else if(fabricObj.toCanvasElement){
+      srcCanvas = fabricObj.toCanvasElement(3);
+      nw = srcCanvas.width; nh = srcCanvas.height;
+    } else { return; }
+    if(!nw || !nh) return;
 
-  _workCanvas = document.createElement('canvas');
-  _workCanvas.width = nw; _workCanvas.height = nh;
-  _workCtx = _workCanvas.getContext('2d');
-  _workCtx.drawImage(trimmed, 0, 0);
+    var trimmed2 = _trimCanvas(srcCanvas);
+    nw = trimmed2.width; nh = trimmed2.height;
+    _origCanvasW = nw; _origCanvasH = nh;
+
+    _origImg = new Image();
+    _origImg.src = trimmed2.toDataURL('image/png');
+
+    _workCanvas = document.createElement('canvas');
+    _workCanvas.width = nw; _workCanvas.height = nh;
+    _workCtx = _workCanvas.getContext('2d');
+    _workCtx.drawImage(trimmed2, 0, 0);
+  }
 
   var m = document.getElementById('logoEditorModal');
   if(m) m.classList.add('open');
-
   _previewEl = document.getElementById('lePreview');
   _drawPreview(_workCanvas);
   _resetToolPanels();
@@ -79,27 +124,86 @@ function open(fabricObj){
   var nameEl = document.getElementById('leFileName');
   if(nameEl) nameEl.textContent = fabricObj._name || 'Logo';
 
-  _isRaster = (fabricObj.type === 'image') && !fabricObj._vectorOrigin;
-
+  // Show/hide bitmap-only tools
   var upBtn = document.getElementById('leToolUpscale');
-  if(upBtn) upBtn.style.display = _isRaster ? '' : 'none';
+  if(upBtn) upBtn.style.display = (_isRaster && !fabricObj._vectorOrigin) ? '' : 'none';
   var bgBtn = document.getElementById('leToolBgRemove');
-  if(bgBtn) bgBtn.style.display = _isRaster ? '' : 'none';
+  if(bgBtn) bgBtn.style.display = (_isRaster && !fabricObj._vectorOrigin) ? '' : 'none';
 
   var info = document.getElementById('leUpInfo');
-  if(info) info.textContent = nw + '×' + nh + ' px';
+  if(info) info.textContent = _origCanvasW + '×' + _origCanvasH + ' px';
 
   _createLoupe();
   _extractColors();
 }
 
-function close(){
+function close(keepChanges){
+  // Vector cancel: undo all modifications if not keeping
+  if(!keepChanges && _modified && _isVector && _fabricObj && _vectorOrigState){
+    _restoreVectorState(_fabricObj, _vectorOrigState);
+    _fabricObj.dirty = true;
+    if(window._gsbCanvas) window._gsbCanvas.requestRenderAll();
+  }
+
   var m = document.getElementById('logoEditorModal');
   if(m) m.classList.remove('open');
   _fabricObj = null; _origImg = null; _workCanvas = null; _workCtx = null;
   _pickMode = false; _pickedRGB = null;
+  _vectorOrigState = null;
+  _preOutlineCanvas = null;
+  _vectorPreOutlineState = null;
+  _hasOutline = false;
   _destroyLoupe();
   clearTimeout(_liveTimer);
+}
+
+/* ══════════ Vector state save/restore ══════════ */
+function _saveVectorState(group){
+  var children = [];
+  var walk = function(objs){
+    objs.forEach(function(o){
+      children.push({
+        obj: o,
+        fill: o.fill,
+        stroke: o.stroke,
+        strokeWidth: o.strokeWidth || 0,
+        paintOrder: o.paintOrder || ''
+      });
+      if(o._objects) walk(o._objects);
+    });
+  };
+  if(group._objects) walk(group._objects);
+  return {
+    children: children,
+    svgSource: group._svgSource || null
+  };
+}
+
+function _restoreVectorState(group, state){
+  state.children.forEach(function(saved){
+    saved.obj.set('fill', saved.fill);
+    saved.obj.set('stroke', saved.stroke);
+    saved.obj.set('strokeWidth', saved.strokeWidth);
+    if(saved.paintOrder) saved.obj.set('paintOrder', saved.paintOrder);
+    else saved.obj.set('paintOrder', '');
+    saved.obj.dirty = true;
+  });
+  group._svgSource = state.svgSource;
+  if(group._originalId && typeof svgSourceStore !== 'undefined'){
+    if(state.svgSource) svgSourceStore.set(group._originalId, state.svgSource);
+  }
+  group.dirty = true;
+}
+
+/* ══════════ Refresh vector preview ══════════ */
+function _refreshVectorPreview(){
+  if(!_isVector || !_fabricObj) return;
+  var vecCanvas = _fabricObj.toCanvasElement(3);
+  var trimmed = _trimCanvas(vecCanvas);
+  _workCanvas.width = trimmed.width;
+  _workCanvas.height = trimmed.height;
+  _workCtx.drawImage(trimmed, 0, 0);
+  _drawPreview(_workCanvas);
 }
 
 /* ══════════ Trim transparent edges ══════════ */
@@ -120,7 +224,6 @@ function _trimCanvas(src){
   if(top > bottom || left > right) return src;
   var tw = right - left + 1;
   var th = bottom - top + 1;
-  // Only trim if there's meaningful transparent margin (>2px each side)
   if(tw >= w - 4 && th >= h - 4) return src;
   var out = document.createElement('canvas');
   out.width = tw; out.height = th;
@@ -136,7 +239,6 @@ function _drawPreview(sourceCanvas){
   var wrap = _previewEl.parentElement;
   var maxW = (wrap ? wrap.clientWidth : 560) - 32;
   var maxH = 360;
-  // Always fill width, constrain by max height
   var scale = maxW / src.width;
   if(src.height * scale > maxH) scale = maxH / src.height;
   var pw = Math.round(src.width * scale);
@@ -169,23 +271,43 @@ function _livePreview(){
 }
 
 function _liveOutline(){
-  var ow = document.getElementById('leOutWidth');
-  var oc = document.getElementById('leOutColor');
-  var width = parseFloat(ow ? ow.value : 0) || 0;
-  var color = oc ? oc.value : '#FFFFFF';
-  if(width <= 0){ _drawPreview(_workCanvas); return; }
-  var tmp = _buildOutline(_workCanvas, width, color);
-  _drawPreview(tmp);
+  if(_isVector){
+    // For vectors, show a raster approximation in preview
+    var ow = document.getElementById('leOutWidth');
+    var oc = document.getElementById('leOutColor');
+    var width = parseFloat(ow ? ow.value : 0) || 0;
+    var color = oc ? oc.value : '#FFFFFF';
+    if(width <= 0){ _drawPreview(_workCanvas); return; }
+    // Get current vector render (without outline stroke changes)
+    var tmp = _buildOutline(_workCanvas, width, color);
+    _drawPreview(tmp);
+    return;
+  }
+  var ow2 = document.getElementById('leOutWidth');
+  var oc2 = document.getElementById('leOutColor');
+  var width2 = parseFloat(ow2 ? ow2.value : 0) || 0;
+  var color2 = oc2 ? oc2.value : '#FFFFFF';
+  if(width2 <= 0){ _drawPreview(_workCanvas); return; }
+  // For raster: use pre-outline canvas if outline was already applied
+  var sourceForOutline = _preOutlineCanvas || _workCanvas;
+  var tmp2 = _buildOutline(sourceForOutline, width2, color2);
+  _drawPreview(tmp2);
 }
 
 function _liveColor(){
   if(!_pickedRGB){ _drawPreview(_workCanvas); return; }
-  var rc = document.getElementById('leReplColor');
-  var ct = document.getElementById('leColorTol');
-  var replHex = rc ? rc.value : '#FF0000';
-  var tolerance = parseInt(ct ? ct.value : 30, 10);
-  var tmp = _buildColorReplace(_workCanvas, _pickedRGB, replHex, tolerance);
-  _drawPreview(tmp);
+  if(_isVector){
+    // For vectors, show raster approximation in preview
+    var rc = document.getElementById('leReplColor');
+    var replHex = rc ? rc.value : '#FF0000';
+    var tmp = _buildColorReplace(_workCanvas, _pickedRGB, replHex, 40);
+    _drawPreview(tmp);
+    return;
+  }
+  var rc2 = document.getElementById('leReplColor');
+  var replHex2 = rc2 ? rc2.value : '#FF0000';
+  var tmp2 = _buildColorReplace(_workCanvas, _pickedRGB, replHex2, 40);
+  _drawPreview(tmp2);
 }
 
 /* ══════════ Tool switching ══════════ */
@@ -208,24 +330,71 @@ function _resetToolPanels(){
   var oc = document.getElementById('leOutColor');
   if(oc) oc.value = '#FFFFFF';
   var ow = document.getElementById('leOutWidth');
-  if(ow) ow.value = '8';
+  if(ow) ow.value = '0';
   var owv = document.getElementById('leOutWidthVal');
-  if(owv) owv.textContent = '8';
+  if(owv) owv.textContent = '0';
   _pickedRGB = null;
   _updatePickedSwatch();
   var rc = document.getElementById('leReplColor');
   if(rc) rc.value = '#FF0000';
-  var ct = document.getElementById('leColorTol');
-  if(ct) ct.value = '30';
-  var ctv = document.getElementById('leColorTolVal');
-  if(ctv) ctv.textContent = '30';
 }
 
 /* ══════════ Extract dominant colors ══════════ */
 function _extractColors(){
-  if(!_workCanvas) return;
   var container = document.getElementById('leColorSwatches');
   if(!container) return;
+
+  if(_isVector && _fabricObj && _fabricObj._objects){
+    // Vector: extract colors from Fabric group children directly
+    var colors = [];
+    var seen = {};
+    var normHex = function(v){
+      if(!v || typeof v !== 'string') return null;
+      if(v === 'none' || v === 'transparent') return null;
+      if(v.startsWith('url')) return null;
+      if(v.startsWith('#')){
+        var h = v.toLowerCase();
+        if(h.length === 4) h = '#'+h[1]+h[1]+h[2]+h[2]+h[3]+h[3];
+        return h;
+      }
+      if(v.startsWith('rgb')){
+        var m = v.match(/(\d+)/g);
+        if(m && m.length >= 3) return _hexFromRgb(+m[0], +m[1], +m[2]).toLowerCase();
+      }
+      return null;
+    };
+    var walk = function(objs){
+      objs.forEach(function(o){
+        if(o._objects) walk(o._objects);
+        ['fill','stroke'].forEach(function(prop){
+          var hex = normHex(o[prop]);
+          if(hex && !seen[hex]){
+            seen[hex] = true;
+            var n = parseInt(hex.substr(1), 16);
+            colors.push({ r:(n>>16)&255, g:(n>>8)&255, b:n&255, hex:hex });
+          }
+        });
+      });
+    };
+    walk(_fabricObj._objects);
+
+    var html = '';
+    colors.forEach(function(c){
+      html += '<button class="le-color-chip" data-r="'+c.r+'" data-g="'+c.g+'" data-b="'+c.b+'" data-hex="'+c.hex+'" title="'+c.hex.toUpperCase()+'" style="background:'+c.hex+'"></button>';
+    });
+    container.innerHTML = html;
+    container.querySelectorAll('.le-color-chip').forEach(function(chip){
+      chip.onclick = function(){
+        _pickedRGB = { r: parseInt(chip.dataset.r,10), g: parseInt(chip.dataset.g,10), b: parseInt(chip.dataset.b,10), hex: chip.dataset.hex };
+        _updatePickedSwatch();
+        _liveColor();
+      };
+    });
+    return;
+  }
+
+  // Raster: sample pixel colors from workCanvas
+  if(!_workCanvas) return;
   var w = _workCanvas.width, h = _workCanvas.height;
   var sampleW = Math.min(w, 200), sampleH = Math.min(h, 200);
   var tmpC = document.createElement('canvas');
@@ -254,16 +423,16 @@ function _extractColors(){
     }
     if(!tooClose) unique.push(parts);
   }
-  var html = '';
+  var html2 = '';
   for(var u = 0; u < unique.length; u++){
     var c = unique[u];
     var hex = '#' + _hex(c[0]) + _hex(c[1]) + _hex(c[2]);
-    html += '<button class="le-color-chip" data-r="'+c[0]+'" data-g="'+c[1]+'" data-b="'+c[2]+'" title="'+hex+'" style="background:'+hex+'"></button>';
+    html2 += '<button class="le-color-chip" data-r="'+c[0]+'" data-g="'+c[1]+'" data-b="'+c[2]+'" data-hex="'+hex+'" title="'+hex+'" style="background:'+hex+'"></button>';
   }
-  container.innerHTML = html;
+  container.innerHTML = html2;
   container.querySelectorAll('.le-color-chip').forEach(function(chip){
     chip.onclick = function(){
-      _pickedRGB = { r: parseInt(chip.dataset.r,10), g: parseInt(chip.dataset.g,10), b: parseInt(chip.dataset.b,10) };
+      _pickedRGB = { r: parseInt(chip.dataset.r,10), g: parseInt(chip.dataset.g,10), b: parseInt(chip.dataset.b,10), hex: chip.dataset.hex };
       _updatePickedSwatch();
       _liveColor();
     };
@@ -284,7 +453,7 @@ function _wireEvents(){
     py = Math.max(0, Math.min(py, _workCanvas.height - 1));
     var d = _workCtx.getImageData(px, py, 1, 1).data;
     if(d[3] < 10) return;
-    _pickedRGB = {r: d[0], g: d[1], b: d[2]};
+    _pickedRGB = {r: d[0], g: d[1], b: d[2], hex: _hexFromRgb(d[0],d[1],d[2]) };
     _pickMode = false;
     _previewEl.style.cursor = '';
     _updatePickedSwatch();
@@ -302,9 +471,10 @@ function _wireEvents(){
   if(outW) outW.addEventListener('input', function(){ _livePreview(); });
   if(outC) outC.addEventListener('input', function(){ _livePreview(); });
   var replC = document.getElementById('leReplColor');
-  var tolR = document.getElementById('leColorTol');
-  if(replC) replC.addEventListener('input', function(){ _livePreview(); });
-  if(tolR) tolR.addEventListener('input', function(){ _livePreview(); });
+  if(replC) replC.addEventListener('input', function(){
+    _updateCmykDisplay('leReplCmyk', replC.value);
+    _livePreview();
+  });
 }
 
 /* ══════════ Loupe ══════════ */
@@ -361,25 +531,55 @@ function _updatePickedSwatch(){
   var txt = document.getElementById('lePickedHex');
   if(!sw || !txt) return;
   if(_pickedRGB){
-    var hex = '#' + _hex(_pickedRGB.r) + _hex(_pickedRGB.g) + _hex(_pickedRGB.b);
+    var hex = _hexFromRgb(_pickedRGB.r, _pickedRGB.g, _pickedRGB.b);
     sw.style.background = hex; sw.style.borderColor = '#999';
     txt.textContent = hex.toUpperCase();
+    // Update CMYK display for picked color
+    _updateCmykDisplay('lePickedCmyk', hex);
   } else {
     sw.style.background = 'repeating-conic-gradient(#ddd 0% 25%,#fff 0% 50%) 50%/10px 10px';
     sw.style.borderColor = '#ddd';
     txt.textContent = 'Kies hieronder of gebruik pipet';
+    var cmykEl = document.getElementById('lePickedCmyk');
+    if(cmykEl) cmykEl.textContent = '';
   }
 }
-function _hex(n){ return n.toString(16).padStart(2,'0'); }
+
+function _updateCmykDisplay(elementId, hex){
+  var el = document.getElementById(elementId);
+  if(!el) return;
+  var h = hex.replace('#','');
+  if(h.length === 3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+  var n = parseInt(h, 16);
+  var r = (n>>16)&255, g = (n>>8)&255, b = n&255;
+  var cmyk = _rgbToCmyk(r, g, b);
+  el.textContent = 'CMYK: ' + cmyk.c + ' / ' + cmyk.m + ' / ' + cmyk.y + ' / ' + cmyk.k;
+}
 
 /* ══════════ Reset ══════════ */
 function reset(){
+  if(_isVector && _fabricObj && _vectorOrigState){
+    _restoreVectorState(_fabricObj, _vectorOrigState);
+    _fabricObj.dirty = true;
+    // Re-save state (so subsequent cancel is clean)
+    _vectorOrigState = _saveVectorState(_fabricObj);
+    _refreshVectorPreview();
+    _modified = false;
+    _hasOutline = false;
+    _vectorPreOutlineState = null;
+    _resetToolPanels();
+    _extractColors();
+    if(window.toast) window.toast('Reset naar origineel', 'info', 1200);
+    return;
+  }
   if(!_origImg || !_workCanvas) return;
   _workCanvas.width = _origImg.naturalWidth || _origImg.width;
   _workCanvas.height = _origImg.naturalHeight || _origImg.height;
   _workCtx.drawImage(_origImg, 0, 0);
   _pickedRGB = null;
   _modified = false;
+  _hasOutline = false;
+  _preOutlineCanvas = null;
   _resetToolPanels();
   _drawPreview(_workCanvas);
   _extractColors();
@@ -421,27 +621,69 @@ function startPick(){
 function applyColorReplace(){
   if(!_pickedRGB) return;
   var rc = document.getElementById('leReplColor');
-  var ct = document.getElementById('leColorTol');
   var replHex = rc ? rc.value : '#FF0000';
-  var tolerance = parseInt(ct ? ct.value : 30, 10);
-  var result = _buildColorReplace(_workCanvas, _pickedRGB, replHex, tolerance);
+  var oldHex = _pickedRGB.hex || _hexFromRgb(_pickedRGB.r, _pickedRGB.g, _pickedRGB.b);
+
+  if(_isVector && _fabricObj){
+    // Vector: use recolorSvgPaths from app.js (modifies group + _svgSource)
+    if(typeof recolorSvgPaths === 'function'){
+      recolorSvgPaths(_fabricObj, oldHex, replHex, 40);
+    }
+    _modified = true;
+    _refreshVectorPreview();
+    _extractColors();
+    _pickedRGB = null;
+    _updatePickedSwatch();
+    if(window.toast) window.toast('Kleur vervangen', 'success', 1200);
+    return;
+  }
+
+  // Raster path
+  var result = _buildColorReplace(_workCanvas, _pickedRGB, replHex, 40);
   _workCtx.drawImage(result, 0, 0);
   _modified = true;
   _pickedRGB = null;
   _updatePickedSwatch();
   _drawPreview(_workCanvas);
   _extractColors();
+  // If we have a pre-outline snapshot, update it too
+  if(_preOutlineCanvas){
+    var prResult = _buildColorReplace(_preOutlineCanvas, _pickedRGB, replHex, 40);
+    var pctx = _preOutlineCanvas.getContext('2d');
+    pctx.drawImage(prResult, 0, 0);
+  }
   if(window.toast) window.toast('Kleur vervangen', 'success', 1200);
 }
 
-function onTolChange(){
-  var ct = document.getElementById('leColorTol');
-  var ctv = document.getElementById('leColorTolVal');
-  if(ct && ctv) ctv.textContent = ct.value;
-  _livePreview();
-}
-
 function _makeAllColor(r, g, b, label){
+  var hexColor = _hexFromRgb(r, g, b);
+
+  if(_isVector && _fabricObj){
+    // Vector: set all fill/stroke to one color
+    var walk = function(objs){
+      objs.forEach(function(o){
+        if(o._objects) walk(o._objects);
+        if(o.fill && o.fill !== 'none' && o.fill !== 'transparent' && typeof o.fill === 'string' && !o.fill.startsWith('url'))
+          o.set('fill', hexColor);
+        if(o.stroke && o.stroke !== 'none' && o.stroke !== 'transparent' && typeof o.stroke === 'string' && !o.stroke.startsWith('url'))
+          o.set('stroke', hexColor);
+        o.dirty = true;
+      });
+    };
+    walk(_fabricObj._objects);
+    _fabricObj.dirty = true;
+
+    // Update _svgSource
+    _updateSvgSourceAllColor(hexColor);
+
+    _modified = true;
+    _refreshVectorPreview();
+    _extractColors();
+    if(window.toast) window.toast(label, 'success', 1200);
+    return;
+  }
+
+  // Raster path
   if(!_workCanvas) return;
   var w = _workCanvas.width, h = _workCanvas.height;
   var data = _workCtx.getImageData(0, 0, w, h);
@@ -452,6 +694,16 @@ function _makeAllColor(r, g, b, label){
   }
   _workCtx.putImageData(data, 0, 0);
   _modified = true;
+  // Update pre-outline snapshot too
+  if(_preOutlineCanvas){
+    var pd = _preOutlineCanvas.getContext('2d').getImageData(0, 0, _preOutlineCanvas.width, _preOutlineCanvas.height);
+    var ppx = pd.data;
+    for(var j = 0; j < ppx.length; j += 4){
+      if(ppx[j+3] < 10) continue;
+      ppx[j] = r; ppx[j+1] = g; ppx[j+2] = b;
+    }
+    _preOutlineCanvas.getContext('2d').putImageData(pd, 0, 0);
+  }
   _drawPreview(_workCanvas);
   _extractColors();
   if(window.toast) window.toast(label, 'success', 1200);
@@ -459,8 +711,48 @@ function _makeAllColor(r, g, b, label){
 function makeAllBlack(){ _makeAllColor(0, 0, 0, 'Logo zwart gemaakt'); }
 function makeAllWhite(){ _makeAllColor(255, 255, 255, 'Logo wit gemaakt'); }
 
+function _updateSvgSourceAllColor(hexColor){
+  if(!_fabricObj || !_fabricObj._svgSource) return;
+  try {
+    var parser = new DOMParser();
+    var doc = parser.parseFromString(_fabricObj._svgSource, 'image/svg+xml');
+    doc.querySelectorAll('*').forEach(function(el){
+      ['fill','stroke'].forEach(function(attr){
+        var val = el.getAttribute(attr);
+        if(val && val !== 'none' && val !== 'transparent' && !val.startsWith('url')){
+          el.setAttribute(attr, hexColor);
+        }
+      });
+      var style = el.getAttribute('style');
+      if(style){
+        var changed = false;
+        var newStyle = style.replace(/(fill|stroke)\s*:\s*([^;]+)/gi, function(match, prop, val){
+          var trimmed = val.trim();
+          if(trimmed !== 'none' && trimmed !== 'transparent' && !trimmed.startsWith('url')){
+            changed = true; return prop + ':' + hexColor;
+          }
+          return match;
+        });
+        if(changed) el.setAttribute('style', newStyle);
+      }
+    });
+    // Also update gradient stops
+    doc.querySelectorAll('stop').forEach(function(stop){
+      var sc = stop.getAttribute('stop-color');
+      if(sc && sc !== 'none') stop.setAttribute('stop-color', hexColor);
+    });
+    _fabricObj._svgSource = new XMLSerializer().serializeToString(doc.documentElement);
+    if(_fabricObj._originalId && typeof svgSourceStore !== 'undefined'){
+      svgSourceStore.set(_fabricObj._originalId, _fabricObj._svgSource);
+    }
+    _fabricObj._recolored = true;
+  } catch(e){
+    console.warn('[LE] Failed to update SVG source:', e);
+  }
+}
+
 /* ══════════════════════════════════════════
-   TOOL 2: ACHTERGROND VERWIJDEREN
+   TOOL 2: ACHTERGROND VERWIJDEREN (bitmap only)
    ══════════════════════════════════════════ */
 var _bgRemoveLib = null;
 
@@ -480,7 +772,6 @@ async function applyBgRemove(){
         _bgRemoveLib = null;
       }
     }
-
     if(_bgRemoveLib){
       if(status) status.textContent = 'Achtergrond verwijderen…';
       var blob = await new Promise(function(resolve){ _workCanvas.toBlob(resolve, 'image/png'); });
@@ -493,8 +784,7 @@ async function applyBgRemove(){
       var resultUrl = URL.createObjectURL(resultBlob);
       var resultImg = await _loadImg(resultUrl);
       URL.revokeObjectURL(resultUrl);
-      _workCanvas.width = resultImg.width;
-      _workCanvas.height = resultImg.height;
+      _workCanvas.width = resultImg.width; _workCanvas.height = resultImg.height;
       _workCtx.clearRect(0, 0, resultImg.width, resultImg.height);
       _workCtx.drawImage(resultImg, 0, 0);
       if(status) status.textContent = 'Randen verscherpen…';
@@ -504,7 +794,6 @@ async function applyBgRemove(){
       _fallbackBgRemove();
       _dtfPostProcess();
     }
-
     _modified = true;
     _drawPreview(_workCanvas);
     if(status) status.textContent = 'Klaar';
@@ -513,10 +802,8 @@ async function applyBgRemove(){
     console.error('[LE] BG remove error:', err);
     if(status) status.textContent = 'Fout, fallback wordt gebruikt…';
     try{
-      _fallbackBgRemove();
-      _dtfPostProcess();
-      _modified = true;
-      _drawPreview(_workCanvas);
+      _fallbackBgRemove(); _dtfPostProcess();
+      _modified = true; _drawPreview(_workCanvas);
       if(status) status.textContent = 'Klaar (basis)';
     }catch(_e){
       if(status) status.textContent = 'Fout: ' + (err.message || 'onbekend');
@@ -525,73 +812,59 @@ async function applyBgRemove(){
   if(btn) btn.disabled = false;
 }
 
-/* DTF post-processing: hard alpha + edge erosion + shadow removal */
+/* DTF post-processing: hard alpha + edge erosion */
 function _dtfPostProcess(){
   var w = _workCanvas.width, h = _workCanvas.height;
   var data = _workCtx.getImageData(0, 0, w, h);
   var px = data.data;
 
-  // Pass 1: Hard alpha threshold — no semi-transparency for DTF
+  // Pass 1: Hard alpha threshold
   for(var i = 3; i < px.length; i += 4){
     px[i] = px[i] < 128 ? 0 : 255;
   }
 
-  // Pass 2: Edge erosion — remove 1px fringe around transparency boundary
-  // This cleans up the white/gray edge artifacts from AI models
+  // Pass 2: Edge erosion — remove fringe pixels
   var alpha1 = new Uint8Array(w * h);
   for(var j = 0; j < w * h; j++) alpha1[j] = px[j * 4 + 3];
-
   for(var y = 0; y < h; y++){
     for(var x = 0; x < w; x++){
       var pos = y * w + x;
       if(alpha1[pos] === 0) continue;
-      // Check 4-connected neighbors for transparency
       var hasEdge = false;
       if(x === 0 || x === w-1 || y === 0 || y === h-1) hasEdge = true;
-      else {
-        if(alpha1[pos - 1] === 0 || alpha1[pos + 1] === 0 ||
-           alpha1[pos - w] === 0 || alpha1[pos + w] === 0) hasEdge = true;
-      }
+      else if(alpha1[pos-1]===0 || alpha1[pos+1]===0 || alpha1[pos-w]===0 || alpha1[pos+w]===0) hasEdge = true;
       if(hasEdge){
-        // Check if this edge pixel looks like fringe (light, low saturation)
         var idx = pos * 4;
-        var r = px[idx], g = px[idx+1], b = px[idx+2];
-        var maxC = Math.max(r, g, b), minC = Math.min(r, g, b);
-        var lum = (r + g + b) / 3;
+        var rr = px[idx], gg = px[idx+1], bb = px[idx+2];
+        var maxC = Math.max(rr, gg, bb), minC = Math.min(rr, gg, bb);
+        var lum = (rr + gg + bb) / 3;
         var sat = maxC > 0 ? (maxC - minC) / maxC : 0;
-        // Remove if it's a light low-saturation fringe pixel
-        if(lum > 160 && sat < 0.15){
-          px[idx + 3] = 0;
-        }
+        if(lum > 160 && sat < 0.15) px[idx + 3] = 0;
       }
     }
   }
 
-  // Pass 3: Second erosion pass for stubborn 2px fringes
+  // Pass 3: Second erosion pass
   var alpha2 = new Uint8Array(w * h);
   for(var j2 = 0; j2 < w * h; j2++) alpha2[j2] = px[j2 * 4 + 3];
-
   for(var y2 = 1; y2 < h - 1; y2++){
     for(var x2 = 1; x2 < w - 1; x2++){
       var pos2 = y2 * w + x2;
       if(alpha2[pos2] === 0) continue;
       if(alpha2[pos2-1]===0 || alpha2[pos2+1]===0 || alpha2[pos2-w]===0 || alpha2[pos2+w]===0){
         var idx2 = pos2 * 4;
-        var r2 = px[idx2], g2 = px[idx2+1], b2 = px[idx2+2];
-        var lum2 = (r2 + g2 + b2) / 3;
-        var maxC2 = Math.max(r2, g2, b2), minC2 = Math.min(r2, g2, b2);
+        var lum2 = (px[idx2] + px[idx2+1] + px[idx2+2]) / 3;
+        var maxC2 = Math.max(px[idx2], px[idx2+1], px[idx2+2]);
+        var minC2 = Math.min(px[idx2], px[idx2+1], px[idx2+2]);
         var sat2 = maxC2 > 0 ? (maxC2 - minC2) / maxC2 : 0;
-        if(lum2 > 200 && sat2 < 0.1){
-          px[idx2 + 3] = 0;
-        }
+        if(lum2 > 200 && sat2 < 0.1) px[idx2 + 3] = 0;
       }
     }
   }
 
-  // Pass 4: Fill isolated transparent holes inside subject
+  // Pass 4: Fill isolated transparent holes
   var alpha3 = new Uint8Array(w * h);
   for(var j3 = 0; j3 < w * h; j3++) alpha3[j3] = px[j3 * 4 + 3];
-
   for(var y3 = 1; y3 < h - 1; y3++){
     for(var x3 = 1; x3 < w - 1; x3++){
       var pos3 = y3 * w + x3;
@@ -605,14 +878,14 @@ function _dtfPostProcess(){
       }
       if(opaqueCount >= 6){
         px[pos3 * 4 + 3] = 255;
-        var sr = 0, sg = 0, sb = 0, sc = 0;
+        var sr2 = 0, sg2 = 0, sb2 = 0, sc2 = 0;
         for(var dy4 = -1; dy4 <= 1; dy4++){
           for(var dx4 = -1; dx4 <= 1; dx4++){
             var npos = (y3+dy4)*w + (x3+dx4);
-            if(alpha3[npos] > 0){ sr += px[npos*4]; sg += px[npos*4+1]; sb += px[npos*4+2]; sc++; }
+            if(alpha3[npos] > 0){ sr2 += px[npos*4]; sg2 += px[npos*4+1]; sb2 += px[npos*4+2]; sc2++; }
           }
         }
-        if(sc > 0){ px[pos3*4] = Math.round(sr/sc); px[pos3*4+1] = Math.round(sg/sc); px[pos3*4+2] = Math.round(sb/sc); }
+        if(sc2 > 0){ px[pos3*4] = Math.round(sr2/sc2); px[pos3*4+1] = Math.round(sg2/sc2); px[pos3*4+2] = Math.round(sb2/sc2); }
       }
     }
   }
@@ -625,8 +898,6 @@ function _fallbackBgRemove(){
   var w = _workCanvas.width, h = _workCanvas.height;
   var data = _workCtx.getImageData(0, 0, w, h);
   var px = data.data;
-
-  // Sample edge pixels for background color
   var samples = [];
   for(var sx = 0; sx < w; sx += Math.max(1, Math.floor(w/20))){
     samples.push({x:sx, y:0}); samples.push({x:sx, y:h-1});
@@ -641,15 +912,11 @@ function _fallbackBgRemove(){
   });
   if(cnt === 0) return;
   bgR = Math.round(bgR/cnt); bgG = Math.round(bgG/cnt); bgB = Math.round(bgB/cnt);
-
   var visited = new Uint8Array(w * h);
   var queue = [];
   for(var ex = 0; ex < w; ex++){ queue.push(ex); queue.push(ex + (h-1)*w); }
   for(var ey = 1; ey < h-1; ey++){ queue.push(ey*w); queue.push(ey*w + w-1); }
-
-  var tolerance = 60;
-  var tolSq = tolerance * tolerance * 3;
-
+  var tolSq = 60 * 60 * 3;
   while(queue.length > 0){
     var pos = queue.pop();
     if(pos < 0 || pos >= w*h || visited[pos]) continue;
@@ -659,13 +926,12 @@ function _fallbackBgRemove(){
     var dr = px[idx]-bgR, dg = px[idx+1]-bgG, db = px[idx+2]-bgB;
     if(dr*dr + dg*dg + db*db > tolSq) continue;
     px[idx+3] = 0;
-    var cx = pos % w, cy = Math.floor(pos / w);
-    if(cx > 0) queue.push(pos-1);
-    if(cx < w-1) queue.push(pos+1);
-    if(cy > 0) queue.push(pos-w);
-    if(cy < h-1) queue.push(pos+w);
+    var cx2 = pos % w, cy2 = Math.floor(pos / w);
+    if(cx2 > 0) queue.push(pos-1);
+    if(cx2 < w-1) queue.push(pos+1);
+    if(cy2 > 0) queue.push(pos-w);
+    if(cy2 < h-1) queue.push(pos+w);
   }
-
   _workCtx.putImageData(data, 0, 0);
 }
 
@@ -708,12 +974,103 @@ function applyOutline(){
   var width = parseFloat(ow ? ow.value : 0) || 0;
   var color = oc ? oc.value : '#FFFFFF';
   if(width <= 0) return;
-  var result = _buildOutline(_workCanvas, width, color);
+
+  if(_isVector && _fabricObj){
+    // Vector: apply outline as stroke on SVG children
+    // First restore pre-outline state if outline was already applied
+    if(_hasOutline && _vectorPreOutlineState){
+      _vectorPreOutlineState.children.forEach(function(saved){
+        saved.obj.set('stroke', saved.stroke);
+        saved.obj.set('strokeWidth', saved.strokeWidth);
+        if(saved.paintOrder) saved.obj.set('paintOrder', saved.paintOrder);
+        else saved.obj.set('paintOrder', '');
+        saved.obj.dirty = true;
+      });
+    }
+    // Save pre-outline state (before applying new outline)
+    if(!_hasOutline){
+      _vectorPreOutlineState = { children: [] };
+      var walk = function(objs){
+        objs.forEach(function(o){
+          _vectorPreOutlineState.children.push({
+            obj: o,
+            stroke: o.stroke,
+            strokeWidth: o.strokeWidth || 0,
+            paintOrder: o.paintOrder || ''
+          });
+          if(o._objects) walk(o._objects);
+        });
+      };
+      walk(_fabricObj._objects);
+    }
+
+    // Apply stroke to all children using paint-order: stroke fill
+    // (stroke draws behind fill, so outline goes outward)
+    var walkApply = function(objs){
+      objs.forEach(function(o){
+        if(o._objects) walkApply(o._objects);
+        o.set('stroke', color);
+        o.set('strokeWidth', width * 2); // *2 because paint-order hides inner half
+        o.set('paintOrder', 'stroke fill');
+        o.dirty = true;
+      });
+    };
+    walkApply(_fabricObj._objects);
+    _fabricObj.dirty = true;
+    _hasOutline = true;
+    _modified = true;
+
+    // Update _svgSource with stroke attributes
+    _updateSvgSourceOutline(color, width * 2);
+
+    _refreshVectorPreview();
+    if(window.toast) window.toast('Outline toegepast', 'success', 1200);
+    return;
+  }
+
+  // Raster: replace outline instead of stacking
+  if(_hasOutline && _preOutlineCanvas){
+    // Restore pre-outline state
+    _workCanvas.width = _preOutlineCanvas.width;
+    _workCanvas.height = _preOutlineCanvas.height;
+    _workCtx.drawImage(_preOutlineCanvas, 0, 0);
+  }
+
+  // Save pre-outline state (first time only)
+  if(!_preOutlineCanvas){
+    _preOutlineCanvas = document.createElement('canvas');
+    _preOutlineCanvas.width = _workCanvas.width;
+    _preOutlineCanvas.height = _workCanvas.height;
+    _preOutlineCanvas.getContext('2d').drawImage(_workCanvas, 0, 0);
+  }
+
+  var sourceForOutline = _preOutlineCanvas;
+  var result = _buildOutline(sourceForOutline, width, color);
   _workCanvas.width = result.width; _workCanvas.height = result.height;
   _workCtx.drawImage(result, 0, 0);
+  _hasOutline = true;
   _modified = true;
   _drawPreview(_workCanvas);
   if(window.toast) window.toast('Outline toegepast', 'success', 1200);
+}
+
+function _updateSvgSourceOutline(color, strokeWidth){
+  if(!_fabricObj || !_fabricObj._svgSource) return;
+  try {
+    var parser = new DOMParser();
+    var doc = parser.parseFromString(_fabricObj._svgSource, 'image/svg+xml');
+    doc.querySelectorAll('path, rect, circle, ellipse, polygon, polyline, line').forEach(function(el){
+      el.setAttribute('stroke', color);
+      el.setAttribute('stroke-width', strokeWidth);
+      el.setAttribute('paint-order', 'stroke fill');
+    });
+    _fabricObj._svgSource = new XMLSerializer().serializeToString(doc.documentElement);
+    if(_fabricObj._originalId && typeof svgSourceStore !== 'undefined'){
+      svgSourceStore.set(_fabricObj._originalId, _fabricObj._svgSource);
+    }
+  } catch(e){
+    console.warn('[LE] Failed to update SVG source outline:', e);
+  }
 }
 
 function previewOutline(){
@@ -724,15 +1081,15 @@ function previewOutline(){
 }
 
 /* ══════════════════════════════════════════
-   TOOL 4: UPSCALE
+   TOOL 4: UPSCALE (bitmap only)
    ══════════════════════════════════════════ */
 function applyUpscale(){
   var sel = document.getElementById('leUpFactor');
   var factor = parseInt(sel ? sel.value : 2, 10);
   var sharp = document.getElementById('leSharpAmount');
   var sharpVal = parseFloat(sharp ? sharp.value : 0.5) || 0.5;
-  var ow = _workCanvas.width, oh = _workCanvas.height;
-  var nw = ow * factor, nh = oh * factor;
+  var ow2 = _workCanvas.width, oh2 = _workCanvas.height;
+  var nw = ow2 * factor, nh = oh2 * factor;
   if(nw > 8000 || nh > 8000){
     if(window.toast) window.toast('Te groot — maximaal 8000px', 'error', 2000);
     return;
@@ -753,7 +1110,7 @@ function applyUpscale(){
   _modified = true;
   _drawPreview(_workCanvas);
   var info = document.getElementById('leUpInfo');
-  if(info) info.textContent = ow + '×' + oh + ' → ' + nw + '×' + nh + ' px';
+  if(info) info.textContent = ow2 + '×' + oh2 + ' → ' + nw + '×' + nh + ' px';
   if(window.toast) window.toast('Upscale ' + factor + 'x toegepast', 'success', 1500);
 }
 
@@ -784,11 +1141,27 @@ function onSharpChange(){
 }
 
 /* ══════════════════════════════════════════
-   APPLY — no trim (outline padding preserved)
+   APPLY — vector stays vector, raster stays raster
    ══════════════════════════════════════════ */
 function apply(){
-  if(!_fabricObj || !_workCanvas || !_modified){ close(); return; }
+  if(!_fabricObj || !_modified){ close(false); return; }
 
+  if(_isVector){
+    // Vector: changes are already applied to the live group
+    _fabricObj.dirty = true;
+    _fabricObj._recolored = true;
+    var canvas = window._gsbCanvas;
+    if(canvas){
+      canvas.requestRenderAll();
+      if(typeof window.renderItemList === 'function') window.renderItemList();
+      if(typeof window.renderSelectedPanel === 'function') window.renderSelectedPanel();
+    }
+    if(window.toast) window.toast('Logo bijgewerkt', 'success');
+    close(true); // keep changes
+    return;
+  }
+
+  // Raster path: create new fabric.Image
   var dataUrl = _workCanvas.toDataURL('image/png');
   var obj = _fabricObj;
   var nw = _workCanvas.width, nh = _workCanvas.height;
@@ -806,7 +1179,6 @@ function apply(){
       scaleX: (newMmW * pxPerMm) / nw,
       scaleY: (newMmH * pxPerMm) / nh,
     });
-    // Disable caching so zoomed view stays sharp
     newImg.objectCaching = false;
 
     newImg._id = obj._id;
@@ -825,6 +1197,10 @@ function apply(){
     if(obj._pdfPageH) newImg._pdfPageH = obj._pdfPageH;
     if(obj._isFillTile) newImg._isFillTile = obj._isFillTile;
 
+    // Clear SVG source — raster edits are not reflected in SVG,
+    // so export must use raster track (Track 3)
+    // Do NOT copy _svgSource to newImg
+
     var canvas = window._gsbCanvas;
     if(canvas){
       if(typeof window.attachObjListeners === 'function') window.attachObjListeners(newImg);
@@ -839,15 +1215,15 @@ function apply(){
     if(window.toast) window.toast('Logo bijgewerkt', 'success');
   }, { crossOrigin: 'anonymous' });
 
-  close();
+  close(true);
 }
 
 /* ══════════ Expose ══════════ */
 window.gsbLogoEditor = {
-  open: open, close: close, apply: apply, reset: reset,
+  open: open, close: function(){ close(false); }, apply: apply, reset: reset,
   selectTool: selectTool,
   applyOutline: applyOutline, previewOutline: previewOutline,
-  startPick: startPick, applyColorReplace: applyColorReplace, onTolChange: onTolChange,
+  startPick: startPick, applyColorReplace: applyColorReplace,
   makeAllBlack: makeAllBlack, makeAllWhite: makeAllWhite,
   applyUpscale: applyUpscale, onSharpChange: onSharpChange,
   applyBgRemove: applyBgRemove,

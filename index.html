@@ -935,7 +935,7 @@ window.addEventListener('load', ()=>{
         <tr><td style="padding:3px 8px 3px 0;color:var(--muted)">0</td><td style="padding:3px 0" data-i18n="zoomFit">Passend</td></tr>
       </table>
     </div>
-    <p class="version-tag">v2.15.1 · 11-07-2026</p>
+    <p class="version-tag">v2.16.0 · 12-07-2026</p>
   </div>
 </div>
 
@@ -1199,8 +1199,11 @@ window.addEventListener('load', ()=>{
   .le-btn{padding:8px 16px;border:none;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;transition:all .15s}
   .le-btn-apply{background:var(--gradient);color:#fff}
   .le-btn-apply:hover{filter:brightness(1.1)}
+  .le-btn-sub{background:#475569;color:#fff}
+  .le-btn-sub:hover{background:#334155}
   .le-btn-pick{background:#fff;color:var(--fg);border:1px solid var(--border);font-size:.72rem}
   .le-btn-pick:hover{border-color:var(--primary);color:var(--primary)}
+  .le-cmyk{font-size:.68rem;font-family:'SF Mono',monospace;color:var(--muted);margin-top:2px}
   .le-status{font-size:.75rem;color:var(--muted);margin-top:6px;min-height:16px}
   .le-info{font-size:.72rem;color:var(--muted);margin-top:4px}
   /* Placeholder when no tool selected */
@@ -1271,16 +1274,13 @@ window.addEventListener('load', ()=>{
               Pipet
             </button>
           </div>
+          <div class="le-cmyk" id="lePickedCmyk"></div>
           <div class="le-row">
             <label>Nieuwe kleur</label>
             <input type="color" id="leReplColor" value="#FF0000">
           </div>
-          <div class="le-row">
-            <label>Tolerantie</label>
-            <input type="range" id="leColorTol" min="5" max="120" step="1" value="30" oninput="gsbLogoEditor.onTolChange()">
-            <span class="le-val" id="leColorTolVal">30</span>
-          </div>
-          <button class="le-btn le-btn-apply" onclick="gsbLogoEditor.applyColorReplace()" style="width:100%;margin-top:8px">Kleur vervangen</button>
+          <div class="le-cmyk" id="leReplCmyk" style="margin-bottom:4px"></div>
+          <button class="le-btn le-btn-sub" onclick="gsbLogoEditor.applyColorReplace()" style="width:100%;margin-top:8px">Kleur vervangen</button>
 
           <div style="border-top:1px solid var(--border);margin-top:14px;padding-top:12px">
             <h4 style="margin:0 0 8px;font-size:.72rem;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:800">Snel omzetten</h4>
@@ -1294,7 +1294,7 @@ window.addEventListener('load', ()=>{
         <!-- ═══ 2. BG Remove (bitmap only) ═══ -->
         <div class="le-tool-panel" id="lePanel_bgremove">
           <h4>Achtergrond verwijderen</h4>
-          <button class="le-btn le-btn-apply" id="leBgRemoveBtn" onclick="gsbLogoEditor.applyBgRemove()" style="width:100%">Achtergrond verwijderen</button>
+          <button class="le-btn le-btn-sub" id="leBgRemoveBtn" onclick="gsbLogoEditor.applyBgRemove()" style="width:100%">Achtergrond verwijderen</button>
           <div class="le-status" id="leBgStatus"></div>
         </div>
 
@@ -1308,10 +1308,10 @@ window.addEventListener('load', ()=>{
           </div>
           <div class="le-row">
             <label>Dikte (px)</label>
-            <input type="range" id="leOutWidth" min="0" max="40" step="1" value="8" oninput="gsbLogoEditor.previewOutline()">
-            <span class="le-val" id="leOutWidthVal">8</span>
+            <input type="range" id="leOutWidth" min="0" max="40" step="1" value="0" oninput="gsbLogoEditor.previewOutline()">
+            <span class="le-val" id="leOutWidthVal">0</span>
           </div>
-          <button class="le-btn le-btn-apply" onclick="gsbLogoEditor.applyOutline()" style="width:100%;margin-top:8px">Outline toepassen</button>
+          <button class="le-btn le-btn-sub" onclick="gsbLogoEditor.applyOutline()" style="width:100%;margin-top:8px">Outline toepassen</button>
         </div>
 
         <!-- ═══ 4. Upscale (bitmap only) ═══ -->
@@ -1331,7 +1331,7 @@ window.addEventListener('load', ()=>{
             <input type="range" id="leSharpAmount" min="0" max="3" step="0.1" value="0.5" oninput="gsbLogoEditor.onSharpChange()">
             <span class="le-val" id="leSharpVal">0.5</span>
           </div>
-          <button class="le-btn le-btn-apply" onclick="gsbLogoEditor.applyUpscale()" style="width:100%;margin-top:8px">Opschalen</button>
+          <button class="le-btn le-btn-sub" onclick="gsbLogoEditor.applyUpscale()" style="width:100%;margin-top:8px">Opschalen</button>
         </div>
       </div>
     </div>
