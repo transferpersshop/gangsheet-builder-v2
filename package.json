@@ -1,0 +1,18 @@
+{
+  "name": "gangsheet-builder-v2",
+  "private": true,
+  "description": "Ontwikkel-tooling voor de Gangsheet Builder. De site zelf heeft geen build-stap.",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@supabase/supabase-js": "2.119.2",
+    "fabric": "5.3.0",
+    "jspdf": "2.5.1",
+    "opentype.js": "2.0.0",
+    "pdf-lib": "1.17.1",
+    "pdfjs-dist": "3.11.174",
+    "svg2pdf.js": "2.2.0"
+  }
+}
